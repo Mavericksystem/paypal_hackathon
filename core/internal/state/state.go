@@ -45,3 +45,12 @@ func All() []State {
 		Reserved, Executing, Captured, Settled, Failed, Uncertain,
 	}
 }
+
+func (s State) Valid() bool {
+	for _, k := range All() {
+		if k == s {
+			return true
+		}
+	}
+	return false
+}
