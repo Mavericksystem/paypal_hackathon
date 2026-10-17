@@ -54,3 +54,14 @@ func (s State) Valid() bool {
 	}
 	return false
 }
+
+func (s State) IsTerminal() bool {
+	return len(transitions[s]) == 0
+}
+
+// Next returns the states reachable in one step from s.
+func Next(s State) []State {
+	out := make([]State, len(transitions[s]))
+	copy(out, transitions[s])
+	return out
+}
