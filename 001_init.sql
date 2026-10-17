@@ -49,3 +49,16 @@ CREATE TABLE reservations (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE TABLE audit_log (
+    seq BIGINT PRIMARY KEY,
+    ts TIMESTAMPTZ NOT NULL,
+    intent_id UUID,
+    actor TEXT NOT NULL,
+    event TEXT NOT NULL,
+    payload JSONB NOT NULL,
+    prev_hash BYTEA NOT NULL,
+    hash BYTEA NOT NULL
+);
+
+CREATE INDEX audit_log_intent_idx ON audit_log (intent_id);
