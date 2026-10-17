@@ -65,3 +65,20 @@ func Next(s State) []State {
 	copy(out, transitions[s])
 	return out
 }
+
+func CanTransition(from, to State) bool {
+	for _, n := range transitions[from] {
+		if n == to {
+			return true
+		}
+	}
+	return false
+}
+
+// Check returns nil if from -> to is allowed, otherwise ErrIllegalTransition.
+func Check(from, to State) error {
+	if CanTransition(from, to) {
+		return nil
+	}
+	return fmt.Errorf("%w: %s -> %s", ErrIllegalTransition, from, to)
+}
