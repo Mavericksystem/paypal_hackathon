@@ -24,3 +24,15 @@ const (
 	// dropped response). The only way out is reconciliation against PayPal.
 	Uncertain State = "uncertain"
 )
+
+var transitions = map[State][]State{
+	Created:         {PolicyChecked},
+	PolicyChecked:   {Denied, PendingApproval, Approved},
+	PendingApproval: {Approved, Rejected},
+	Approved:        {Reserved, Denied},
+	Reserved:        {Executing, Failed},
+	Executing:       {Captured, Failed, Uncertain},
+	Uncertain:       {Captured, Failed},
+	Captured:        {Settled},
+	// Denied, Rejected, Failed and Settled are terminal.
+}
