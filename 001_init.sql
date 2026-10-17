@@ -13,3 +13,22 @@ CREATE TABLE budgets (
         reserved_minor + committed_minor <= limit_minor
     )
 );
+
+CREATE TABLE intents (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
+    agent_id TEXT NOT NULL,
+    budget_id UUID NOT NULL REFERENCES budgets (id),
+    state TEXT NOT NULL,
+    amount_minor BIGINT NOT NULL CHECK (amount_minor > 0),
+    currency CHAR(3) NOT NULL,
+    merchant TEXT NOT NULL,
+    recipient TEXT NOT NULL,
+    goal TEXT NOT NULL DEFAULT '',
+    idempotency_key TEXT NOT NULL,
+    paypal_order_id TEXT,
+    version BIGINT NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    -- An agent that retries the same request gets the same intent back.
+    UNIQUE (agent_id, idempotency_key)
+);
