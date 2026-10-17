@@ -36,3 +36,12 @@ var transitions = map[State][]State{
 	Captured:        {Settled},
 	// Denied, Rejected, Failed and Settled are terminal.
 }
+var ErrIllegalTransition = errors.New("illegal state transition")
+
+// All returns every known state.
+func All() []State {
+	return []State{
+		Created, PolicyChecked, Denied, PendingApproval, Approved, Rejected,
+		Reserved, Executing, Captured, Settled, Failed, Uncertain,
+	}
+}
