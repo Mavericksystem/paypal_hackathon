@@ -32,3 +32,20 @@ CREATE TABLE intents (
     -- An agent that retries the same request gets the same intent back.
     UNIQUE (agent_id, idempotency_key)
 );
+
+CREATE TABLE reservations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
+    -- UNIQUE: one intent can reserve money at most once.
+    intent_id UUID NOT NULL UNIQUE REFERENCES intents (id),
+    budget_id UUID NOT NULL REFERENCES budgets (id),
+    amount_minor BIGINT NOT NULL CHECK (amount_minor > 0),
+    status TEXT NOT NULL CHECK (
+        status IN (
+            'reserved',
+            'committed',
+            'released'
+        )
+    ),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
