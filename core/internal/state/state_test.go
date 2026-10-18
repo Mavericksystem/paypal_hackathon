@@ -41,3 +41,23 @@ func TestOnlyExecutingAndUncertainReachCaptured(t *testing.T) {
 		t.Fatalf("states leading to Captured = %v", from)
 	}
 }
+
+func reachable(target, forbidden State) bool {
+	seen := map[State]bool{Created: true}
+	queue := []State{Created}
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+		if cur == target {
+			return true
+		}
+		for _, n := range Next(cur) {
+			if n == forbidden || seen[n] {
+				continue
+			}
+			seen[n] = true
+			queue = append(queue, n)
+		}
+	}
+	return false
+}
