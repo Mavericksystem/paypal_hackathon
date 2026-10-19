@@ -75,3 +75,8 @@ func TestNoCaptureWithoutApproval(t *testing.T) {
 		t.Fatal("found a path to Captured that skips Approved")
 	}
 }
+func TestNoCaptureWithoutPolicyCheck(t *testing.T) {
+	if reachable(Captured, PolicyChecked) {
+		t.Fatal("found a path to Captured that skips PolicyChecked")
+	}
+}
