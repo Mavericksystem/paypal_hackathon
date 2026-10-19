@@ -61,3 +61,12 @@ func reachable(target, forbidden State) bool {
 	}
 	return false
 }
+
+func TestNoCaptureWithoutReservation(t *testing.T) {
+	if !reachable(Captured, "") {
+		t.Fatal("Captured must be reachable at all")
+	}
+	if reachable(Captured, Reserved) {
+		t.Fatal("found a path to Captured that skips Reserved")
+	}
+}
