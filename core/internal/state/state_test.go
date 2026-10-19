@@ -70,3 +70,8 @@ func TestNoCaptureWithoutReservation(t *testing.T) {
 		t.Fatal("found a path to Captured that skips Reserved")
 	}
 }
+func TestNoCaptureWithoutApproval(t *testing.T) {
+	if reachable(Captured, Approved) {
+		t.Fatal("found a path to Captured that skips Approved")
+	}
+}
