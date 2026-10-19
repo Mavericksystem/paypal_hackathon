@@ -123,3 +123,13 @@ func TestCheckReturnsTypedError(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+func TestAllStatesValid(t *testing.T) {
+	for _, s := range All() {
+		if !s.Valid() {
+			t.Errorf("%s not valid", s)
+		}
+	}
+	if State("bogus").Valid() {
+		t.Fatal("bogus state accepted")
+	}
+}
