@@ -1,6 +1,7 @@
 package state
 
 import (
+	"errors"
 	"sort"
 	"testing"
 )
@@ -112,5 +113,13 @@ func TestNoCycles(t *testing.T) {
 		if color[s] == white && visit(s) {
 			t.Fatal("state machine contains a cycle")
 		}
+	}
+}
+func TestCheckReturnsTypedError(t *testing.T) {
+	if err := Check(Created, Captured); !errors.Is(err, ErrIllegalTransition) {
+		t.Fatalf("got %v, want ErrIllegalTransition", err)
+	}
+	if err := Check(Created, PolicyChecked); err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
