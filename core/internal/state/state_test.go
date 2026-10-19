@@ -80,3 +80,10 @@ func TestNoCaptureWithoutPolicyCheck(t *testing.T) {
 		t.Fatal("found a path to Captured that skips PolicyChecked")
 	}
 }
+func TestEveryStateReachableFromCreated(t *testing.T) {
+	for _, s := range All() {
+		if !reachable(s, "") {
+			t.Errorf("%s is unreachable", s)
+		}
+	}
+}
