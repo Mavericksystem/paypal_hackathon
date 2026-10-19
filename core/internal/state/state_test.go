@@ -87,3 +87,30 @@ func TestEveryStateReachableFromCreated(t *testing.T) {
 		}
 	}
 }
+func TestNoCycles(t *testing.T) {
+	const (
+		white = iota
+		grey
+		black
+	)
+	color := map[State]int{}
+	var visit func(State) bool
+	visit = func(s State) bool {
+		color[s] = grey
+		for _, n := range Next(s) {
+			if color[n] == grey {
+				return true
+			}
+			if color[n] == white && visit(n) {
+				return true
+			}
+		}
+		color[s] = black
+		return false
+	}
+	for _, s := range All() {
+		if color[s] == white && visit(s) {
+			t.Fatal("state machine contains a cycle")
+		}
+	}
+}
