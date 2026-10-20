@@ -60,3 +60,21 @@ func TestConcurrentReservationsNeverExceedBudget(t *testing.T) {
 	for i := range intents {
 		intents[i] = testutil.InsertIntent(t, pool, budget, each, "USD")
 	}
+	var ok, denied atomic.Int64
+	var wg sync.WaitGroup
+	for _, id := range intents {
+		wg.Add(1)
+		go func(id string) {
+			defer wg.Done()
+			err := reserve(pool, id, budget, each, time.Now())
+			switch {
+			case err == nil:
+				ok.Add(1)
+			case errors.Is(err, ledger.ErrBudgetExceeded):
+				denied.Add(1)
+			default:
+				t.Errorf("unexpected error: %v", err)
+			}
+		}(id)
+	}
+	wg.Wait()
