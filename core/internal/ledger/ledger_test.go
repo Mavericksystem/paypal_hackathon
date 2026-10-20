@@ -202,3 +202,14 @@ func TestIntentCannotReserveTwice(t *testing.T) {
 		t.Fatalf("reserved %d, want 100", s.Reserved)
 	}
 }
+
+func TestExpiredBudgetRejects(t *testing.T) {
+	pool := testutil.NewPool(t)
+	past := time.Now().Add(-time.Minute)
+	budget := mustBudget(t, pool, "old", 1000, "", &past)
+	intent := testutil.InsertIntent(t, pool, budget, 100, "USD")
+
+	if err := reserve(pool, intent, budget, 100, time.Now()); !errors.Is(err, ledger.ErrBudgetExpired) {
+		t.Fatalf("want ErrBudgetExpired, got %v", err)
+	}
+}
