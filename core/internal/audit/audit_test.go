@@ -101,3 +101,20 @@ func TestEditedPayloadIsDetected(t *testing.T) {
 	}
 	fmt.Println("tamper detected:", res.Reason)
 }
+
+func TestDeletedRowIsDetected(t *testing.T) {
+	pool := testutil.NewPool(t)
+	ctx := context.Background()
+	seed(t, pool, 1, 20)
+
+	if _, err := pool.Exec(ctx, `DELETE FROM audit_log WHERE seq = 5`); err != nil {
+		t.Fatal(err)
+	}
+	res, err := audit.Verify(ctx, pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.OK || res.BrokenAtSeq != 6 {
+		t.Fatalf("want break at seq 6 (gap), got %+v", res)
+	}
+}
