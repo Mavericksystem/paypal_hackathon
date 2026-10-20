@@ -118,3 +118,15 @@ func chainIDs(ctx context.Context, tx pgx.Tx, budgetID string) ([]string, error)
 	}
 	return ids, nil
 }
+
+func lockChain(ctx context.Context, tx pgx.Tx, budgetID string) ([]budgetRow, error) {
+	ids, err := chainIDs(ctx, tx, budgetID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := tx.Query(ctx, `
+		SELECT id::text, currency, limit_minor, reserved_minor, committed_minor, expires_at
+		FROM budgets WHERE id::text = ANY($1) ORDER BY id FOR UPDATE`, ids)
+	if err != nil {
+		return nil, fmt.Errorf("lock budget chain: %w", err)
+	}
