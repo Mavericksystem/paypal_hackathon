@@ -46,3 +46,22 @@ type budgetRow struct {
 	committed int64
 	expiresAt *time.Time
 }
+func CreateBudget(ctx context.Context, q Querier, name, currency string, limitMinor int64, parentID string, expiresAt *time.Time) (string, error) {
+	if limitMinor < 0 {
+		return "", ErrInvalidAmount
+	}
+	var parent any
+	if parentID != "" {
+		var parentCurrency string
+		err := q.QueryRow(ctx, `SELECT currency FROM budgets WHERE id = $1::uuid`, parentID).Scan(&parentCurrency)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", ErrBudgetNotFound
+		}
+		if err != nil {
+			return "", fmt.Errorf("read parent budget: %w", err)
+		}
+		if parentCurrency != currency {
+			return "", fmt.Errorf("%w: parent is %s, child is %s", ErrCurrencyMismatch, parentCurrency, currency)
+		}
+		parent = parentID
+	}
