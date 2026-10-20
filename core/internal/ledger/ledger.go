@@ -176,3 +176,12 @@ func Reserve(ctx context.Context, tx pgx.Tx, intentID, budgetID string, amount i
 			return fmt.Errorf("%w: budget %s has %d left, need %d", ErrBudgetExceeded, b.id, free, amount)
 		}
 	}
+	_, err = tx.Exec(ctx,
+		`INSERT INTO reservations (intent_id, budget_id, amount_minor, status)
+		 VALUES ($1::uuid, $2::uuid, $3, $4)`, intentID, budgetID, amount, statusReserved)
+	if err != nil {
+		if isPgCode(err, "23505") {
+			return ErrAlreadyReserved
+		}
+		return fmt.Errorf("insert reservation: %w", err)
+	}
