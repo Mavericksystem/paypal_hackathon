@@ -93,3 +93,23 @@ func Append(ctx context.Context, tx pgx.Tx, intentID, actor, event string, paylo
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return Entry{}, fmt.Errorf("read chain head: %w", err)
 	}
+	e := Entry{
+		Seq:      prevSeq + 1,
+		TS:       now.UTC().Truncate(time.Microsecond),
+		IntentID: intentID,
+		Actor:    actor,
+		Event:    event,
+		Payload:  canon,
+		PrevHash: prevHash,
+	}
+	e.Hash = computeHash(e)
+
+	_, err = tx.Exec(ctx,
+		`INSERT INTO audit_log (seq, ts, intent_id, actor, event, payload, prev_hash, hash)
+		 VALUES ($1, $2, NULLIF($3, '')::uuid, $4, $5, $6::jsonb, $7, $8)`,
+		e.Seq, e.TS, e.IntentID, e.Actor, e.Event, string(e.Payload), e.PrevHash, e.Hash)
+	if err != nil {
+		return Entry{}, fmt.Errorf("insert audit entry: %w", err)
+	}
+	return e, nil
+}
