@@ -130,3 +130,17 @@ func lockChain(ctx context.Context, tx pgx.Tx, budgetID string) ([]budgetRow, er
 	if err != nil {
 		return nil, fmt.Errorf("lock budget chain: %w", err)
 	}
+	defer rows.Close()
+	var out []budgetRow
+	for rows.Next() {
+		var b budgetRow
+		if err := rows.Scan(&b.id, &b.currency, &b.limit, &b.reserved, &b.committed, &b.expiresAt); err != nil {
+			return nil, fmt.Errorf("scan budget: %w", err)
+		}
+		out = append(out, b)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate budgets: %w", err)
+	}
+	return out, nil
+}
