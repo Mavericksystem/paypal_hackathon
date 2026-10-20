@@ -144,3 +144,10 @@ func lockChain(ctx context.Context, tx pgx.Tx, budgetID string) ([]budgetRow, er
 	}
 	return out, nil
 }
+func idsOf(chain []budgetRow) []string {
+	ids := make([]string, len(chain))
+	for i, b := range chain {
+		ids[i] = b.id
+	}
+	return ids
+}
