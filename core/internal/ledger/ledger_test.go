@@ -172,3 +172,17 @@ func TestCommitAndReleaseAreIdempotentAndExclusive(t *testing.T) {
 	if s.Reserved != 0 || s.Committed != 500 {
 		t.Fatalf("after commit: %+v", s)
 	}
+	if err := reserve(pool, i2, budget, 300, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if err := settle(pool, i2, ledger.Release); err != nil {
+		t.Fatal(err)
+	}
+	if err := settle(pool, i2, ledger.Release); err != nil {
+		t.Fatalf("second release: %v", err)
+	}
+	s = snap(t, pool, budget)
+	if s.Reserved != 0 || s.Committed != 500 || s.Available() != 500 {
+		t.Fatalf("after release: %+v", s)
+	}
+}
