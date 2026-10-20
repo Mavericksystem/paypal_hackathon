@@ -115,3 +115,13 @@ func TestChildCannotExceedParent(t *testing.T) {
 		t.Fatalf("parent reserved %d, want 600", s.Reserved)
 	}
 }
+
+
+func TestConcurrentSiblingsRespectParent(t *testing.T) {
+	pool := testutil.NewPool(t)
+	parent := mustBudget(t, pool, "parent", 1000, "", nil)
+	children := []string{
+		mustBudget(t, pool, "c1", 1000, parent, nil),
+		mustBudget(t, pool, "c2", 1000, parent, nil),
+		mustBudget(t, pool, "c3", 1000, parent, nil),
+	}
