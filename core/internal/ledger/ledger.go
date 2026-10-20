@@ -156,3 +156,23 @@ func isPgCode(err error, code string) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == code
 }
+
+func Reserve(ctx context.Context, tx pgx.Tx, intentID, budgetID string, amount int64, currency string, now time.Time) error {
+	if amount <= 0 {
+		return ErrInvalidAmount
+	}
+	chain, err := lockChain(ctx, tx, budgetID)
+	if err != nil {
+		return err
+	}
+	for _, b := range chain {
+		if b.currency != currency {
+			return fmt.Errorf("%w: budget %s is %s, payment is %s", ErrCurrencyMismatch, b.id, b.currency, currency)
+		}
+		if b.expiresAt != nil && !now.Before(*b.expiresAt) {
+			return fmt.Errorf("%w: budget %s", ErrBudgetExpired, b.id)
+		}
+		if free := b.limit - b.reserved - b.committed; free < amount {
+			return fmt.Errorf("%w: budget %s has %d left, need %d", ErrBudgetExceeded, b.id, free, amount)
+		}
+	}
