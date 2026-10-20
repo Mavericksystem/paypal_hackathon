@@ -82,3 +82,22 @@ func TestRolledBackAppendLeavesNoGap(t *testing.T) {
 		t.Fatalf("want ok with 2 entries, got %+v", res)
 	}
 }
+
+func TestEditedPayloadIsDetected(t *testing.T) {
+	pool := testutil.NewPool(t)
+	ctx := context.Background()
+	seed(t, pool, 1, 20)
+
+	_, err := pool.Exec(ctx, `UPDATE audit_log SET payload = '{"amount_minor": 999999}'::jsonb WHERE seq = 10`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := audit.Verify(ctx, pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.OK || res.BrokenAtSeq != 10 {
+		t.Fatalf("want break at seq 10, got %+v", res)
+	}
+	fmt.Println("tamper detected:", res.Reason)
+}
