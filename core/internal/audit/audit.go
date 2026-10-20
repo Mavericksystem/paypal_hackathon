@@ -66,3 +66,14 @@ func canonical(raw []byte) ([]byte, error) {
 	}
 	return json.Marshal(v)
 }
+
+func canonicalPayload(payload any) ([]byte, error) {
+	if payload == nil {
+		return []byte("{}"), nil
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("marshal payload: %w", err)
+	}
+	return canonical(raw)
+}
