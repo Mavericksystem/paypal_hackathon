@@ -45,3 +45,16 @@ func seed(t *testing.T, pool *pgxpool.Pool, workers, each int) {
 	}
 	wg.Wait()
 }
+
+func TestConcurrentAppendsKeepChainValid(t *testing.T) {
+	pool := testutil.NewPool(t)
+	seed(t, pool, 20, 5)
+
+	res, err := audit.Verify(context.Background(), pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.OK || res.Entries != 100 {
+		t.Fatalf("want ok with 100 entries, got %+v", res)
+	}
+}
