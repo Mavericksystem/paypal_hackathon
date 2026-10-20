@@ -118,3 +118,22 @@ func TestDeletedRowIsDetected(t *testing.T) {
 		t.Fatalf("want break at seq 6 (gap), got %+v", res)
 	}
 }
+
+func TestRewrittenHashStillBreaksNextEntry(t *testing.T) {
+	pool := testutil.NewPool(t)
+	ctx := context.Background()
+	seed(t, pool, 1, 10)
+
+	// An attacker edits entry 4 AND recomputes nothing: hash mismatch at 4.
+	_, err := pool.Exec(ctx, `UPDATE audit_log SET event = 'forged' WHERE seq = 4`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := audit.Verify(ctx, pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.OK || res.BrokenAtSeq != 4 {
+		t.Fatalf("want break at seq 4, got %+v", res)
+	}
+}
