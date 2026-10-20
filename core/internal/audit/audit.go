@@ -38,3 +38,21 @@ type hashInput struct {
 	Payload  json.RawMessage `json:"payload"`
 	PrevHash string          `json:"prev_hash"`
 }
+
+func computeHash(e Entry) []byte {
+	b, err := json.Marshal(hashInput{
+		Seq:      e.Seq,
+		TS:       e.TS.UnixMicro(),
+		IntentID: e.IntentID,
+		Actor:    e.Actor,
+		Event:    e.Event,
+		Payload:  e.Payload,
+		PrevHash: hex.EncodeToString(e.PrevHash),
+	})
+	if err != nil {
+		// hashInput only contains strings, ints and validated JSON.
+		panic(fmt.Sprintf("audit: marshal hash input: %v", err))
+	}
+	sum := sha256.Sum256(b)
+	return sum[:]
+}
