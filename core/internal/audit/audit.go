@@ -147,3 +147,22 @@ func Verify(ctx context.Context, q Queryer) (Result, error) {
 			return Result{BrokenAtSeq: e.Seq, Reason: "payload is not valid JSON"}, nil
 		}
 		e.Payload = canon
+		switch {
+		case e.Seq != expect:
+			return Result{Entries: res.Entries, BrokenAtSeq: e.Seq,
+				Reason: fmt.Sprintf("sequence gap: expected %d, found %d", expect, e.Seq)}, nil
+		case !bytes.Equal(e.PrevHash, prev):
+			return Result{Entries: res.Entries, BrokenAtSeq: e.Seq, Reason: "prev_hash does not match previous entry"}, nil
+		case !bytes.Equal(computeHash(e), e.Hash):
+			return Result{Entries: res.Entries, BrokenAtSeq: e.Seq, Reason: "hash does not match entry contents"}, nil
+		}
+		prev = e.Hash
+		expect++
+		res.Entries++
+	}
+	if err := rows.Err(); err != nil {
+		return Result{}, fmt.Errorf("iterate audit log: %w", err)
+	}
+	res.OK = true
+	return res, nil
+}
