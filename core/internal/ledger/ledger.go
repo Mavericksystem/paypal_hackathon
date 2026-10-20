@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 var (
@@ -150,4 +151,8 @@ func idsOf(chain []budgetRow) []string {
 		ids[i] = b.id
 	}
 	return ids
+}
+func isPgCode(err error, code string) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == code
 }
