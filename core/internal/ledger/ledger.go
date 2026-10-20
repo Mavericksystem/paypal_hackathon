@@ -77,3 +77,16 @@ func CreateBudget(ctx context.Context, q Querier, name, currency string, limitMi
 	}
 	return id, nil
 }
+func GetSnapshot(ctx context.Context, q Querier, budgetID string) (Snapshot, error) {
+	s := Snapshot{ID: budgetID}
+	err := q.QueryRow(ctx,
+		`SELECT limit_minor, reserved_minor, committed_minor FROM budgets WHERE id = $1::uuid`,
+		budgetID).Scan(&s.Limit, &s.Reserved, &s.Committed)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Snapshot{}, ErrBudgetNotFound
+	}
+	if err != nil {
+		return Snapshot{}, fmt.Errorf("read budget: %w", err)
+	}
+	return s, nil
+}
