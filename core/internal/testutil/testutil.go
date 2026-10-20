@@ -48,3 +48,15 @@ func NewPool(t *testing.T) *pgxpool.Pool {
 	})
 	return pool
 }
+func InsertIntent(t *testing.T, pool *pgxpool.Pool, budgetID string, amountMinor int64, currency string) string {
+	t.Helper()
+	var id string
+	err := pool.QueryRow(context.Background(),
+		`INSERT INTO intents (agent_id, budget_id, state, amount_minor, currency, merchant, recipient, idempotency_key)
+		 VALUES ('test-agent', $1::uuid, 'created', $2, $3, 'test-merchant', 'test-recipient', gen_random_uuid()::text)
+		 RETURNING id::text`, budgetID, amountMinor, currency).Scan(&id)
+	if err != nil {
+		t.Fatalf("insert intent: %v", err)
+	}
+	return id
+}
