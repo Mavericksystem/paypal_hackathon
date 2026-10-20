@@ -3,6 +3,7 @@ package ledger
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -46,6 +47,7 @@ type budgetRow struct {
 	committed int64
 	expiresAt *time.Time
 }
+
 func CreateBudget(ctx context.Context, q Querier, name, currency string, limitMinor int64, parentID string, expiresAt *time.Time) (string, error) {
 	if limitMinor < 0 {
 		return "", ErrInvalidAmount
@@ -65,3 +67,13 @@ func CreateBudget(ctx context.Context, q Querier, name, currency string, limitMi
 		}
 		parent = parentID
 	}
+	var id string
+	err := q.QueryRow(ctx,
+		`INSERT INTO budgets (parent_id, name, currency, limit_minor, expires_at)
+		 VALUES ($1::uuid, $2, $3, $4, $5) RETURNING id::text`,
+		parent, name, currency, limitMinor, expiresAt).Scan(&id)
+	if err != nil {
+		return "", fmt.Errorf("insert budget: %w", err)
+	}
+	return id, nil
+}
