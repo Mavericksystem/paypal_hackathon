@@ -58,3 +58,19 @@ func TestConcurrentAppendsKeepChainValid(t *testing.T) {
 		t.Fatalf("want ok with 100 entries, got %+v", res)
 	}
 }
+func TestRolledBackAppendLeavesNoGap(t *testing.T) {
+	pool := testutil.NewPool(t)
+	ctx := context.Background()
+	appendOne(t, pool, 1)
+
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := audit.Append(ctx, tx, "", "test", "will_roll_back", nil, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Rollback(ctx); err != nil {
+		t.Fatal(err)
+	}
+	appendOne(t, pool, 2)
