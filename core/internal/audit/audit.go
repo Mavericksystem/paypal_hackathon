@@ -113,3 +113,14 @@ func Append(ctx context.Context, tx pgx.Tx, intentID, actor, event string, paylo
 	}
 	return e, nil
 }
+
+type Queryer interface {
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+}
+
+type Result struct {
+	OK          bool
+	Entries     int64
+	BrokenAtSeq int64
+	Reason      string
+}
