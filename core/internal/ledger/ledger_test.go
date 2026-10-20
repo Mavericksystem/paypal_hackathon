@@ -43,3 +43,11 @@ func settle(pool *pgxpool.Pool, intent string, fn func(context.Context, pgx.Tx, 
 	}
 	return tx.Commit(ctx)
 }
+func snap(t *testing.T, pool *pgxpool.Pool, id string) ledger.Snapshot {
+	t.Helper()
+	s, err := ledger.GetSnapshot(context.Background(), pool, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
