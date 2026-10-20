@@ -241,3 +241,12 @@ func TestCurrencyMismatchRejects(t *testing.T) {
 		t.Fatalf("want ErrCurrencyMismatch, got %v", err)
 	}
 }
+
+func TestChildCurrencyMustMatchParent(t *testing.T) {
+	pool := testutil.NewPool(t)
+	parent := mustBudget(t, pool, "parent", 1000, "", nil)
+	_, err := ledger.CreateBudget(context.Background(), pool, "eur-child", "EUR", 100, parent, nil)
+	if !errors.Is(err, ledger.ErrCurrencyMismatch) {
+		t.Fatalf("want ErrCurrencyMismatch, got %v", err)
+	}
+}
