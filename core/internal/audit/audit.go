@@ -77,3 +77,19 @@ func canonicalPayload(payload any) ([]byte, error) {
 	}
 	return canonical(raw)
 }
+
+func Append(ctx context.Context, tx pgx.Tx, intentID, actor, event string, payload any, now time.Time) (Entry, error) {
+	canon, err := canonicalPayload(payload)
+	if err != nil {
+		return Entry{}, err
+	}
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, lockKey); err != nil {
+		return Entry{}, fmt.Errorf("lock audit chain: %w", err)
+	}
+
+	prevSeq := int64(0)
+	prevHash := genesis
+	err = tx.QueryRow(ctx, `SELECT seq, hash FROM audit_log ORDER BY seq DESC LIMIT 1`).Scan(&prevSeq, &prevHash)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return Entry{}, fmt.Errorf("read chain head: %w", err)
+	}
