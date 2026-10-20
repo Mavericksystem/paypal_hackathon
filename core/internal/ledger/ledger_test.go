@@ -186,3 +186,19 @@ func TestCommitAndReleaseAreIdempotentAndExclusive(t *testing.T) {
 		t.Fatalf("after release: %+v", s)
 	}
 }
+
+func TestIntentCannotReserveTwice(t *testing.T) {
+	pool := testutil.NewPool(t)
+	budget := mustBudget(t, pool, "root", 1000, "", nil)
+	intent := testutil.InsertIntent(t, pool, budget, 100, "USD")
+
+	if err := reserve(pool, intent, budget, 100, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if err := reserve(pool, intent, budget, 100, time.Now()); !errors.Is(err, ledger.ErrAlreadyReserved) {
+		t.Fatalf("want ErrAlreadyReserved, got %v", err)
+	}
+	if s := snap(t, pool, budget); s.Reserved != 100 {
+		t.Fatalf("reserved %d, want 100", s.Reserved)
+	}
+}
