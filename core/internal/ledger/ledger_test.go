@@ -18,3 +18,15 @@ func mustBudget(t *testing.T, pool *pgxpool.Pool, name string, limit int64, pare
 	}
 	return id
 }
+func reserve(pool *pgxpool.Pool, intent, budget string, amount int64, now time.Time) error {
+	ctx := context.Background()
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	if err := ledger.Reserve(ctx, tx, intent, budget, amount, "USD", now); err != nil {
+		_ = tx.Rollback(ctx)
+		return err
+	}
+	return tx.Commit(ctx)
+}
