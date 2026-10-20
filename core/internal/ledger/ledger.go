@@ -220,3 +220,26 @@ func settle(ctx context.Context, tx pgx.Tx, intentID, to string) error {
 	if status != statusReserved {
 		return fmt.Errorf("%w: reservation is %s, cannot become %s", ErrBadReservationState, status, to)
 	}
+	chain, err := lockChain(ctx, tx, budgetID)
+	if err != nil {
+		return err
+	}
+	if to == statusCommitted {
+		_, err = tx.Exec(ctx,
+			`UPDATE budgets SET reserved_minor = reserved_minor - $1, committed_minor = committed_minor + $1
+			 WHERE id::text = ANY($2)`, amount, idsOf(chain))
+	} else {
+		_, err = tx.Exec(ctx,
+			`UPDATE budgets SET reserved_minor = reserved_minor - $1 WHERE id::text = ANY($2)`,
+			amount, idsOf(chain))
+	}
+	if err != nil {
+		return fmt.Errorf("update budgets: %w", err)
+	}
+	_, err = tx.Exec(ctx,
+		`UPDATE reservations SET status = $2, updated_at = now() WHERE intent_id = $1::uuid`, intentID, to)
+	if err != nil {
+		return fmt.Errorf("update reservation: %w", err)
+	}
+	return nil
+}
