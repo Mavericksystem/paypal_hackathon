@@ -90,3 +90,14 @@ func GetSnapshot(ctx context.Context, q Querier, budgetID string) (Snapshot, err
 	}
 	return s, nil
 }
+func chainIDs(ctx context.Context, tx pgx.Tx, budgetID string) ([]string, error) {
+	rows, err := tx.Query(ctx, `
+		WITH RECURSIVE chain AS (
+			SELECT id, parent_id FROM budgets WHERE id = $1::uuid
+			UNION ALL
+			SELECT b.id, b.parent_id FROM budgets b JOIN chain c ON b.id = c.parent_id
+		)
+		SELECT id::text FROM chain`, budgetID)
+	if err != nil {
+		return nil, fmt.Errorf("walk budget chain: %w", err)
+	}
