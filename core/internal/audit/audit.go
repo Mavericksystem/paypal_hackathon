@@ -56,3 +56,13 @@ func computeHash(e Entry) []byte {
 	sum := sha256.Sum256(b)
 	return sum[:]
 }
+
+func canonical(raw []byte) ([]byte, error) {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var v any
+	if err := dec.Decode(&v); err != nil {
+		return nil, fmt.Errorf("decode payload: %w", err)
+	}
+	return json.Marshal(v)
+}
