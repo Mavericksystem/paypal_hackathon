@@ -2,6 +2,9 @@ package ledger_test
 
 import (
 	"context"
+	"errors"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -78,3 +81,12 @@ func TestConcurrentReservationsNeverExceedBudget(t *testing.T) {
 		}(id)
 	}
 	wg.Wait()
+
+	if ok.Load() != 33 || denied.Load() != 67 {
+		t.Fatalf("want 33 ok and 67 denied, got %d and %d", ok.Load(), denied.Load())
+	}
+	s := snap(t, pool, budget)
+	if s.Reserved != 33*each || s.Reserved > s.Limit {
+		t.Fatalf("reserved %d, limit %d", s.Reserved, s.Limit)
+	}
+}
