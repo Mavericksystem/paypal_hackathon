@@ -124,3 +124,26 @@ type Result struct {
 	BrokenAtSeq int64
 	Reason      string
 }
+
+func Verify(ctx context.Context, q Queryer) (Result, error) {
+	rows, err := q.Query(ctx, `SELECT seq, ts, COALESCE(intent_id::text, ''), actor, event, payload, prev_hash, hash
+		FROM audit_log ORDER BY seq`)
+	if err != nil {
+		return Result{}, fmt.Errorf("read audit log: %w", err)
+	}
+	defer rows.Close()
+
+	res := Result{}
+	prev := genesis
+	expect := int64(1)
+	for rows.Next() {
+		var e Entry
+		var payload []byte
+		if err := rows.Scan(&e.Seq, &e.TS, &e.IntentID, &e.Actor, &e.Event, &payload, &e.PrevHash, &e.Hash); err != nil {
+			return Result{}, fmt.Errorf("scan audit entry: %w", err)
+		}
+		canon, err := canonical(payload)
+		if err != nil {
+			return Result{BrokenAtSeq: e.Seq, Reason: "payload is not valid JSON"}, nil
+		}
+		e.Payload = canon
