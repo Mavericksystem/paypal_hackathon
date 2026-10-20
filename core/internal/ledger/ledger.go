@@ -185,3 +185,14 @@ func Reserve(ctx context.Context, tx pgx.Tx, intentID, budgetID string, amount i
 		}
 		return fmt.Errorf("insert reservation: %w", err)
 	}
+	_, err = tx.Exec(ctx,
+		`UPDATE budgets SET reserved_minor = reserved_minor + $1 WHERE id::text = ANY($2)`,
+		amount, idsOf(chain))
+	if err != nil {
+		if isPgCode(err, "23514") { // CHECK violation: the database refused to overspend
+			return ErrBudgetExceeded
+		}
+		return fmt.Errorf("update budgets: %w", err)
+	}
+	return nil
+}
