@@ -28,3 +28,13 @@ type Entry struct {
 	PrevHash []byte
 	Hash     []byte
 }
+
+type hashInput struct {
+	Seq      int64           `json:"seq"`
+	TS       int64           `json:"ts"`
+	IntentID string          `json:"intent_id"`
+	Actor    string          `json:"actor"`
+	Event    string          `json:"event"`
+	Payload  json.RawMessage `json:"payload"`
+	PrevHash string          `json:"prev_hash"`
+}
