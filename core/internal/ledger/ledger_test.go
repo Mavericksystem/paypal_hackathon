@@ -105,3 +105,13 @@ func TestChildCannotExceedParent(t *testing.T) {
 	if err := reserve(pool, ib, b, 600, time.Now()); !errors.Is(err, ledger.ErrBudgetExceeded) {
 		t.Fatalf("second reserve: want ErrBudgetExceeded, got %v", err)
 	}
+	if err := settle(pool, ia, ledger.Release); err != nil {
+		t.Fatal(err)
+	}
+	if err := reserve(pool, ib, b, 600, time.Now()); err != nil {
+		t.Fatalf("after release: %v", err)
+	}
+	if s := snap(t, pool, parent); s.Reserved != 600 {
+		t.Fatalf("parent reserved %d, want 600", s.Reserved)
+	}
+}
