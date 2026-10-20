@@ -116,7 +116,6 @@ func TestChildCannotExceedParent(t *testing.T) {
 	}
 }
 
-
 func TestConcurrentSiblingsRespectParent(t *testing.T) {
 	pool := testutil.NewPool(t)
 	parent := mustBudget(t, pool, "parent", 1000, "", nil)
@@ -142,3 +141,11 @@ func TestConcurrentSiblingsRespectParent(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+
+	if ok.Load() != 10 {
+		t.Fatalf("parent allows exactly 10 x 100, got %d", ok.Load())
+	}
+	if s := snap(t, pool, parent); s.Reserved != 1000 {
+		t.Fatalf("parent reserved %d, want 1000", s.Reserved)
+	}
+}
