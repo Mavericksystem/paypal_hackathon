@@ -101,3 +101,20 @@ func chainIDs(ctx context.Context, tx pgx.Tx, budgetID string) ([]string, error)
 	if err != nil {
 		return nil, fmt.Errorf("walk budget chain: %w", err)
 	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan chain id: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate chain: %w", err)
+	}
+	if len(ids) == 0 {
+		return nil, ErrBudgetNotFound
+	}
+	return ids, nil
+}
