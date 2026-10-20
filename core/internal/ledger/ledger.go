@@ -202,3 +202,21 @@ func Commit(ctx context.Context, tx pgx.Tx, intentID string) error {
 func Release(ctx context.Context, tx pgx.Tx, intentID string) error {
 	return settle(ctx, tx, intentID, statusReleased)
 }
+func settle(ctx context.Context, tx pgx.Tx, intentID, to string) error {
+	var budgetID, status string
+	var amount int64
+	err := tx.QueryRow(ctx,
+		`SELECT budget_id::text, amount_minor, status FROM reservations WHERE intent_id = $1::uuid FOR UPDATE`,
+		intentID).Scan(&budgetID, &amount, &status)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrReservationNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("read reservation: %w", err)
+	}
+	if status == to {
+		return nil
+	}
+	if status != statusReserved {
+		return fmt.Errorf("%w: reservation is %s, cannot become %s", ErrBadReservationState, status, to)
+	}
