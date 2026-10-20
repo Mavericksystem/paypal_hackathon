@@ -196,3 +196,6 @@ func Reserve(ctx context.Context, tx pgx.Tx, intentID, budgetID string, amount i
 	}
 	return nil
 }
+func Commit(ctx context.Context, tx pgx.Tx, intentID string) error {
+	return settle(ctx, tx, intentID, statusCommitted)
+}
