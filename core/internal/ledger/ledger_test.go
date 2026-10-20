@@ -125,3 +125,20 @@ func TestConcurrentSiblingsRespectParent(t *testing.T) {
 		mustBudget(t, pool, "c2", 1000, parent, nil),
 		mustBudget(t, pool, "c3", 1000, parent, nil),
 	}
+
+	var ok atomic.Int64
+	var wg sync.WaitGroup
+	for i := 0; i < 60; i++ {
+		child := children[i%len(children)]
+		intent := testutil.InsertIntent(t, pool, child, 100, "USD")
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := reserve(pool, intent, child, 100, time.Now()); err == nil {
+				ok.Add(1)
+			} else if !errors.Is(err, ledger.ErrBudgetExceeded) {
+				t.Errorf("unexpected error: %v", err)
+			}
+		}()
+	}
+	wg.Wait()
