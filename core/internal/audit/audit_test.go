@@ -31,3 +31,17 @@ func appendOne(t *testing.T, pool *pgxpool.Pool, n int) {
 		t.Errorf("commit: %v", err)
 	}
 }
+func seed(t *testing.T, pool *pgxpool.Pool, workers, each int) {
+	t.Helper()
+	var wg sync.WaitGroup
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func(w int) {
+			defer wg.Done()
+			for i := 0; i < each; i++ {
+				appendOne(t, pool, w*1000+i)
+			}
+		}(w)
+	}
+	wg.Wait()
+}
