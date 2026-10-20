@@ -51,3 +51,12 @@ func snap(t *testing.T, pool *pgxpool.Pool, id string) ledger.Snapshot {
 	}
 	return s
 }
+func TestConcurrentReservationsNeverExceedBudget(t *testing.T) {
+	pool := testutil.NewPool(t)
+	const agents, each, limit = 100, 300, 10_000
+	budget := mustBudget(t, pool, "root", limit, "", nil)
+
+	intents := make([]string, agents)
+	for i := range intents {
+		intents[i] = testutil.InsertIntent(t, pool, budget, each, "USD")
+	}
