@@ -213,3 +213,15 @@ func TestExpiredBudgetRejects(t *testing.T) {
 		t.Fatalf("want ErrBudgetExpired, got %v", err)
 	}
 }
+
+func TestExpiredParentRejectsChild(t *testing.T) {
+	pool := testutil.NewPool(t)
+	past := time.Now().Add(-time.Minute)
+	parent := mustBudget(t, pool, "parent", 1000, "", &past)
+	child := mustBudget(t, pool, "child", 500, parent, nil)
+	intent := testutil.InsertIntent(t, pool, child, 100, "USD")
+
+	if err := reserve(pool, intent, child, 100, time.Now()); !errors.Is(err, ledger.ErrBudgetExpired) {
+		t.Fatalf("want ErrBudgetExpired, got %v", err)
+	}
+}
