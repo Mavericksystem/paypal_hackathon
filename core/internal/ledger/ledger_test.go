@@ -225,3 +225,19 @@ func TestExpiredParentRejectsChild(t *testing.T) {
 		t.Fatalf("want ErrBudgetExpired, got %v", err)
 	}
 }
+
+func TestCurrencyMismatchRejects(t *testing.T) {
+	pool := testutil.NewPool(t)
+	budget := mustBudget(t, pool, "usd", 1000, "", nil)
+	intent := testutil.InsertIntent(t, pool, budget, 100, "EUR")
+
+	ctx := context.Background()
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+	if err := ledger.Reserve(ctx, tx, intent, budget, 100, "EUR", time.Now()); !errors.Is(err, ledger.ErrCurrencyMismatch) {
+		t.Fatalf("want ErrCurrencyMismatch, got %v", err)
+	}
+}
