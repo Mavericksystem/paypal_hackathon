@@ -90,3 +90,18 @@ func TestConcurrentReservationsNeverExceedBudget(t *testing.T) {
 		t.Fatalf("reserved %d, limit %d", s.Reserved, s.Limit)
 	}
 }
+func TestChildCannotExceedParent(t *testing.T) {
+	pool := testutil.NewPool(t)
+	parent := mustBudget(t, pool, "parent", 1000, "", nil)
+	a := mustBudget(t, pool, "child-a", 800, parent, nil)
+	b := mustBudget(t, pool, "child-b", 800, parent, nil)
+
+	ia := testutil.InsertIntent(t, pool, a, 600, "USD")
+	ib := testutil.InsertIntent(t, pool, b, 600, "USD")
+
+	if err := reserve(pool, ia, a, 600, time.Now()); err != nil {
+		t.Fatalf("first reserve: %v", err)
+	}
+	if err := reserve(pool, ib, b, 600, time.Now()); !errors.Is(err, ledger.ErrBudgetExceeded) {
+		t.Fatalf("second reserve: want ErrBudgetExceeded, got %v", err)
+	}
