@@ -74,3 +74,11 @@ func TestRolledBackAppendLeavesNoGap(t *testing.T) {
 		t.Fatal(err)
 	}
 	appendOne(t, pool, 2)
+	res, err := audit.Verify(ctx, pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.OK || res.Entries != 2 {
+		t.Fatalf("want ok with 2 entries, got %+v", res)
+	}
+}
