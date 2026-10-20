@@ -149,3 +149,26 @@ func TestConcurrentSiblingsRespectParent(t *testing.T) {
 		t.Fatalf("parent reserved %d, want 1000", s.Reserved)
 	}
 }
+
+func TestCommitAndReleaseAreIdempotentAndExclusive(t *testing.T) {
+	pool := testutil.NewPool(t)
+	budget := mustBudget(t, pool, "root", 1000, "", nil)
+	i1 := testutil.InsertIntent(t, pool, budget, 500, "USD")
+	i2 := testutil.InsertIntent(t, pool, budget, 300, "USD")
+
+	if err := reserve(pool, i1, budget, 500, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if err := settle(pool, i1, ledger.Commit); err != nil {
+		t.Fatal(err)
+	}
+	if err := settle(pool, i1, ledger.Commit); err != nil { // retry is harmless
+		t.Fatalf("second commit: %v", err)
+	}
+	if err := settle(pool, i1, ledger.Release); !errors.Is(err, ledger.ErrBadReservationState) {
+		t.Fatalf("release after commit: want ErrBadReservationState, got %v", err)
+	}
+	s := snap(t, pool, budget)
+	if s.Reserved != 0 || s.Committed != 500 {
+		t.Fatalf("after commit: %+v", s)
+	}
