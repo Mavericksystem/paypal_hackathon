@@ -1,5 +1,4 @@
 package audit_test
-package audit_test
 
 import (
 	"context"
@@ -13,6 +12,7 @@ import (
 	"github.com/Mavericksystem/warden/core/internal/audit"
 	"github.com/Mavericksystem/warden/core/internal/testutil"
 )
+
 func appendOne(t *testing.T, pool *pgxpool.Pool, n int) {
 	t.Helper()
 	ctx := context.Background()
@@ -31,6 +31,7 @@ func appendOne(t *testing.T, pool *pgxpool.Pool, n int) {
 		t.Errorf("commit: %v", err)
 	}
 }
+
 func seed(t *testing.T, pool *pgxpool.Pool, workers, each int) {
 	t.Helper()
 	var wg sync.WaitGroup
