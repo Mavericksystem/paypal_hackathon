@@ -76,3 +76,17 @@ def test_model(client: httpx.Client, model_id: str) -> None:
         print("Expected: escalate or deny (the agent asked for the wrong item).")
     except json.JSONDecodeError:
         print("JSON:    INVALID. This model fails basic structured output.")
+
+        def main() -> None:
+    if not API_KEY:
+        fail("NVIDIA_API_KEY is not set. Put it in eval/.env (see the guide).")
+    headers = {"Authorization": f"Bearer {API_KEY}", "Accept": "application/json"}
+    with httpx.Client(headers=headers, timeout=60) as client:
+        ids = list_models(client)
+        if len(sys.argv) < 2:
+            print("Pick one id from the list and run: uv run python check_nim.py <model-id>")
+            return
+        model_id = sys.argv[1]
+        if model_id not in ids:
+            print(f"WARNING: {model_id} is not in the listed models, trying anyway.\n")
+        test_model(client, model_id)
