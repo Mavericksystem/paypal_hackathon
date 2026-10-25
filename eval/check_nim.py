@@ -47,3 +47,17 @@ def list_models(client: httpx.Client) -> list[str]:
             print(f"  {model_id}")
     print()
     return ids
+
+def test_model(client: httpx.Client, model_id: str) -> None:
+    body = {
+        "model": model_id,
+        "messages": [
+            {"role": "system", "content": TEST_SYSTEM},
+            {"role": "user", "content": TEST_USER},
+        ],
+        "temperature": 0,
+        "max_tokens": 200,
+    }
+    started = time.perf_counter()
+    response = client.post(f"{BASE_URL}/chat/completions", json=body)
+    elapsed = time.perf_counter() - started
