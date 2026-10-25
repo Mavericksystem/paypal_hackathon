@@ -61,3 +61,18 @@ def test_model(client: httpx.Client, model_id: str) -> None:
     started = time.perf_counter()
     response = client.post(f"{BASE_URL}/chat/completions", json=body)
     elapsed = time.perf_counter() - started
+
+    if response.status_code != 200:
+        fail(f"chat/completions returned {response.status_code}: {response.text[:300]}")
+
+    content = response.json()["choices"][0]["message"]["content"] or ""
+    print(f"Model:   {model_id}")
+    print(f"Latency: {elapsed:.2f}s")
+    print(f"Raw:     {content.strip()[:300]}")
+    try:
+        parsed = json.loads(strip_fences(content))
+        valid = parsed.get("verdict") in {"allow", "escalate", "deny"}
+        print(f"JSON:    valid, verdict={parsed.get('verdict')!r}, schema ok={valid}")
+        print("Expected: escalate or deny (the agent asked for the wrong item).")
+    except json.JSONDecodeError:
+        print("JSON:    INVALID. This model fails basic structured output.")
