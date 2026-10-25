@@ -35,3 +35,15 @@ def strip_fences(text: str) -> str:
         text = text.split("\n", 1)[1] if "\n" in text else text
         text = text.rsplit("```", 1)[0]
     return text.strip()
+
+def list_models(client: httpx.Client) -> list[str]:
+    response = client.get(f"{BASE_URL}/models")
+    if response.status_code != 200:
+        fail(f"GET /models returned {response.status_code}: {response.text[:300]}")
+    ids = sorted(item["id"] for item in response.json().get("data", []))
+    print(f"{len(ids)} models listed. Families we care about:\n")
+    for model_id in ids:
+        if any(family in model_id.lower() for family in FAMILIES):
+            print(f"  {model_id}")
+    print()
+    return ids
