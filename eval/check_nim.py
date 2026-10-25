@@ -90,3 +90,6 @@ def test_model(client: httpx.Client, model_id: str) -> None:
         if model_id not in ids:
             print(f"WARNING: {model_id} is not in the listed models, trying anyway.\n")
         test_model(client, model_id)
+
+if __name__ == "__main__":
+    main()
