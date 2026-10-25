@@ -23,3 +23,15 @@ TEST_USER = (
     "Agent request: pay 480 dollars to AudioShop for 10 wireless headphones.\n"
     "The merchant and the amount are both on the allowlist."
 )
+
+def fail(message: str) -> None:
+    print(f"ERROR: {message}")
+    sys.exit(1)
+
+
+def strip_fences(text: str) -> str:
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[1] if "\n" in text else text
+        text = text.rsplit("```", 1)[0]
+    return text.strip()
