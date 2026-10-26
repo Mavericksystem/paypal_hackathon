@@ -16,6 +16,8 @@ var (
 	ErrBudgetExceeded      = errors.New("budget exceeded")
 	ErrBudgetExpired       = errors.New("budget expired")
 	ErrCurrencyMismatch    = errors.New("currency mismatch")
+	ErrIntentNotFound      = errors.New("intent not found")
+	ErrIntentMismatch      = errors.New("intent does not match reservation")
 	ErrAlreadyReserved     = errors.New("intent already has a reservation")
 	ErrReservationNotFound = errors.New("reservation not found")
 	ErrBadReservationState = errors.New("reservation is in a conflicting state")
@@ -160,6 +162,22 @@ func isPgCode(err error, code string) bool {
 func Reserve(ctx context.Context, tx pgx.Tx, intentID, budgetID string, amount int64, currency string, now time.Time) error {
 	if amount <= 0 {
 		return ErrInvalidAmount
+	}
+	var intentBudget, intentCurrency string
+	var intentAmount int64
+	err := tx.QueryRow(ctx,
+		`SELECT budget_id::text, amount_minor, currency
+		 FROM intents WHERE id = $1::uuid FOR UPDATE`,
+		intentID).Scan(&intentBudget, &intentAmount, &intentCurrency)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrIntentNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("read intent: %w", err)
+	}
+	if intentBudget != budgetID || intentAmount != amount || intentCurrency != currency {
+		return fmt.Errorf("%w: intent budget=%s amount=%d currency=%s, request budget=%s amount=%d currency=%s",
+			ErrIntentMismatch, intentBudget, intentAmount, intentCurrency, budgetID, amount, currency)
 	}
 	chain, err := lockChain(ctx, tx, budgetID)
 	if err != nil {
