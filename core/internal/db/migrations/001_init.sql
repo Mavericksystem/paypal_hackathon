@@ -1,3 +1,5 @@
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 CREATE TABLE budgets (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
     parent_id UUID REFERENCES budgets (id),
