@@ -55,6 +55,9 @@ func (s State) Valid() bool {
 }
 
 func (s State) IsTerminal() bool {
+	if !s.Valid() {
+		return false
+	}
 	return len(transitions[s]) == 0
 }
 
