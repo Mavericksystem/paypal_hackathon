@@ -10,6 +10,7 @@ load_dotenv()
 
 BASE_URL = os.getenv("NIM_BASE_URL", "https://integrate.api.nvidia.com/v1")
 API_KEY = os.getenv("NVIDIA_API_KEY")
+DEFAULT_MODEL = os.getenv("NIM_MODEL", "openai/gpt-oss-20b")
 FAMILIES = ["deepseek", "glm", "gemma", "gpt-oss", "nemotron", "llama", "qwen", "mistral"]
 
 TEST_SYSTEM = (
@@ -96,9 +97,10 @@ def main() -> None:
     with httpx.Client(headers=headers, timeout=60) as client:
         ids = list_models(client)
         if len(sys.argv) < 2:
-            print("Pick one id from the list and run: uv run python check_nim.py <model-id>")
-            return
-        model_id = sys.argv[1]
+            model_id = DEFAULT_MODEL
+            print(f"No model supplied; testing the configured default: {model_id}\n")
+        else:
+            model_id = sys.argv[1]
         if model_id not in ids:
             print(f"WARNING: {model_id} is not in the listed models, trying anyway.\n")
         test_model(client, model_id)
