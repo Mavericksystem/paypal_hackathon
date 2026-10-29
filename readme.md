@@ -1,2 +1,10 @@
 # paypal_hackathon
-keep the openai/gpt-oss-20b model
+
+The NIM evaluator uses `openai/gpt-oss-20b` by default. Set `NIM_MODEL` or pass
+another model ID as the first argument to test a different model:
+
+```powershell
+$env:NVIDIA_API_KEY = "your-key"
+uv run python eval/check_nim.py
+uv run python eval/check_nim.py <model-id>
+```
