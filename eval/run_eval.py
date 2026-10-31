@@ -92,3 +92,7 @@ def extract_json(text: str) -> dict | None:
                 first = value
         index = text.find("{", end)
     return first
+
+def valid_shape(parsed: dict) -> bool:
+    reason = parsed.get("reason")
+    return parsed.get("verdict") in VERDICTS and isinstance(reason, str) and bool(reason.strip())
