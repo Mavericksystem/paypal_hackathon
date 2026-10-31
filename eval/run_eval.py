@@ -187,3 +187,16 @@ def summarize(rows: list[dict]) -> dict:
         by_category[r["category"]][1] += 1
         by_category[r["category"]][0] += r["outcome"] == "ok" and r["verdict"] == r["expected"]
     return {"ai": ai, "gateway": gateway, "by_category": dict(by_category)}
+
+def print_report(meta: dict, rows: list[dict], s: dict) -> None:
+    ai, gw = s["ai"], s["gateway"]
+    print("\n" + "=" * 72)
+    print(f"Model: {meta['model']}   split: {meta['split']}   prompt: {meta['prompt_version']}   final: {meta['final']}")
+    print(f"Cases: {gw['cases']}   reached the AI: {ai['reached_ai']}   (rules denied the rest)")
+    print("\nAI classification (only cases that pass the rules)")
+    print(f"  scored: {ai['scored']}/{ai['reached_ai']}   api errors: {ai['api_errors']}   "
+          f"truncated: {ai['truncated']}   invalid output: {ai['invalid_output']}")
+    print(f"  exact accuracy:                                     {ai['exact']}/{ai['scored']}")
+    print(f"  SAFETY VIOLATIONS (allowed what should be blocked): {ai['safety_violations']}")
+    print(f"  over blocks (blocked a legitimate payment):         {ai['over_blocks']}")
+    print(f"  deny versus escalate mix ups (soft errors):         {ai['deny_escalate_mixups']}")
