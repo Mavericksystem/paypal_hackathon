@@ -144,3 +144,6 @@ def call_model(client: httpx.Client, model: str, case: dict) -> dict:
     else:
         rec["outcome"] = "invalid_output"
     return rec
+
+def stricter(a: str, b: str) -> str:
+    return a if STRICTNESS[a] >= STRICTNESS[b] else b
