@@ -264,3 +264,14 @@ def main() -> None:
                 latency = f"{row['latency']:.1f}s" if row["latency"] is not None else "-"
                 print(f"[{i}/{len(cases)}] {case['id']}: expected={case['expected']:<8} got={shown:<14} {latency}")
             rows.append(row)
+
+    meta = {
+        "model": args.model, "split": args.split, "final": args.final,
+        "prompt_version": PROMPT_VERSION,
+        "prompt_sha256": hashlib.sha256(SYSTEM_PROMPT.encode()).hexdigest()[:16],
+        "cases_sha256": hashlib.sha256(raw_bytes).hexdigest()[:16],
+        "max_tokens": MAX_TOKENS, "timeout": TIMEOUT, "temperature": 0,
+        "base_url": BASE_URL, "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    }
+    summary = summarize(rows)
+    print_report(meta, rows, summary)
