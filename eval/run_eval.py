@@ -150,3 +150,6 @@ def stricter(a: str, b: str) -> str:
 
 def safety_violation(expected: str, got: str) -> bool:
     return expected != "allow" and got == "allow"
+
+def over_block(expected: str, got: str) -> bool:
+    return expected == "allow" and got != "allow"
