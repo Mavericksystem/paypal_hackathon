@@ -47,3 +47,18 @@ Choose exactly one verdict:
  
 Reply with JSON only, no other text, in exactly this shape:
 {"verdict": "allow" | "escalate" | "deny", "reason": "<one short sentence>"}"""
+
+def rules_check(case: dict, policy: dict) -> list[str]:
+    """Deterministic checks. Returns the list of failed rules, empty if all pass."""
+    req = case["request"]
+    budget = case.get("budget_remaining_minor", policy["default_budget_remaining_minor"])
+    failed = []
+    if req["merchant"] not in policy["allowlist"]:
+        failed.append("merchant not on allowlist")
+    if req["currency"] != policy["currency"]:
+        failed.append("currency not allowed")
+    if req["amount_minor"] > policy["max_payment_minor"]:
+        failed.append("over per payment maximum")
+    if req["amount_minor"] > budget:
+        failed.append("over remaining budget")
+    return failed
