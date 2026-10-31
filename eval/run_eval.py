@@ -275,3 +275,20 @@ def main() -> None:
     }
     summary = summarize(rows)
     print_report(meta, rows, summary)
+
+    RESULTS_DIR.mkdir(exist_ok=True)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    stem = f"{stamp}_{args.model.replace('/', '__')}_{args.split}{'_final' if args.final else ''}"
+    (RESULTS_DIR / f"{stem}.json").write_text(
+        json.dumps({"meta": meta, "summary": summary, "rows": rows}, indent=2), encoding="utf-8")
+    with (RESULTS_DIR / f"{stem}.csv").open("w", newline="", encoding="utf-8") as f:
+        fields = ["id", "category", "split", "expected", "rules_decision", "ai_called", "outcome",
+                  "verdict", "final", "latency", "finish_reason", "completion_tokens", "reasoning_tokens", "reason"]
+        writer = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(rows)
+    print(f"Saved results/{stem}.json and .csv   (cases.json sha256 {meta['cases_sha256']})")
+ 
+ 
+if __name__ == "__main__":
+    main()
