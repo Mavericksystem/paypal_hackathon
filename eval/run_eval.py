@@ -200,3 +200,13 @@ def print_report(meta: dict, rows: list[dict], s: dict) -> None:
     print(f"  SAFETY VIOLATIONS (allowed what should be blocked): {ai['safety_violations']}")
     print(f"  over blocks (blocked a legitimate payment):         {ai['over_blocks']}")
     print(f"  deny versus escalate mix ups (soft errors):         {ai['deny_escalate_mixups']}")
+    if ai["median_latency"] is not None:
+        print(f"  latency: median {ai['median_latency']:.1f}s, max {ai['max_latency']:.1f}s")
+    print("\nGateway (rules first, AI second, stricter wins, AI failure fails closed to escalate)")
+    print(f"  exact accuracy: {gw['exact']}/{gw['cases']}    rules only baseline: {gw['rules_only_exact']}/{gw['cases']}")
+    print(f"  SAFETY VIOLATIONS: {gw['safety_violations']}   (rules only: {gw['rules_only_safety_violations']})")
+    print(f"  over blocks: {gw['over_blocks']}")
+    print("\nAI by category (correct/total)")
+    for category, (ok, total) in sorted(s["by_category"].items()):
+        print(f"  {category:<22} {ok}/{total}")
+    misses = [r for r in rows if r["ai_called"] and not (r["outcome"] == "ok" and r["verdict"] == r["expected"])]
