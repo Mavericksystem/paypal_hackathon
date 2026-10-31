@@ -73,3 +73,22 @@ def build_messages(case: dict) -> list[dict]:
         f"Seller text (untrusted):\n<<<\n{case['seller_text']}\n>>>"
     )
     return [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": user}]
+
+def extract_json(text: str) -> dict | None:
+    """Return the first JSON object that has a 'verdict' key, else the first object, else None."""
+    decoder = json.JSONDecoder()
+    first = None
+    index = text.find("{")
+    while index != -1:
+        try:
+            value, end = decoder.raw_decode(text, index)
+        except json.JSONDecodeError:
+            index = text.find("{", index + 1)
+            continue
+        if isinstance(value, dict):
+            if "verdict" in value:
+                return value
+            if first is None:
+                first = value
+        index = text.find("{", end)
+    return first
