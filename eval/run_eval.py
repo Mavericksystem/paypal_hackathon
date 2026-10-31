@@ -210,3 +210,9 @@ def print_report(meta: dict, rows: list[dict], s: dict) -> None:
     for category, (ok, total) in sorted(s["by_category"].items()):
         print(f"  {category:<22} {ok}/{total}")
     misses = [r for r in rows if r["ai_called"] and not (r["outcome"] == "ok" and r["verdict"] == r["expected"])]
+    if misses:
+        print("\nAI misses and failures")
+        for r in misses:
+            got = r["verdict"] if r["outcome"] == "ok" else f"<{r['outcome']}{' ' + r['error'] if r['error'] else ''}>"
+            print(f"  {r['id']}  expected={r['expected']:<8} got={got:<10} {(r['reason'] or '')[:70]}")
+    print("=" * 72)
