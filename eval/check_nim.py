@@ -9,7 +9,6 @@ Usage:
 
 import json
 import os
-import re
 import sys
 import time
 
@@ -45,24 +44,32 @@ def fail(message: str) -> None:
 
 
 def extract_json(text: str) -> dict | None:
-    """Parse a JSON object from text, tolerating code fences and extra prose."""
-    text = text.strip()
-    if text.startswith("```"):
-        text = text.split("\n", 1)[1] if "\n" in text else text
-        text = text.rsplit("```", 1)[0].strip()
-    try:
-        value = json.loads(text)
-        return value if isinstance(value, dict) else None
-    except json.JSONDecodeError:
-        pass
-    match = re.search(r"\{.*\}", text, re.DOTALL)
-    if match:
+    """Return the first JSON object with a verdict, else the first object."""
+    decoder = json.JSONDecoder()
+    first = None
+    index = text.find("{")
+    while index != -1:
         try:
-            value = json.loads(match.group(0))
-            return value if isinstance(value, dict) else None
+            value, end = decoder.raw_decode(text, index)
         except json.JSONDecodeError:
-            return None
-    return None
+            index = text.find("{", index + 1)
+            continue
+        if isinstance(value, dict):
+            if "verdict" in value:
+                return value
+            if first is None:
+                first = value
+        index = text.find("{", end)
+    return first
+
+
+def valid_shape(parsed: dict) -> bool:
+    reason = parsed.get("reason")
+    return (
+        parsed.get("verdict") in {"allow", "escalate", "deny"}
+        and isinstance(reason, str)
+        and bool(reason.strip())
+    )
 
 
 def list_models(client: httpx.Client) -> list[str]:
@@ -122,8 +129,8 @@ def test_model(client: httpx.Client, model_id: str, raw: bool) -> dict:
         verdict = parsed.get("verdict")
         result["json"] = "yes"
         result["verdict"] = str(verdict)
-        if verdict not in {"allow", "escalate", "deny"}:
-            result["note"] = "JSON ok but verdict is not allow, escalate or deny"
+        if not valid_shape(parsed):
+            result["note"] = "JSON ok but fails the schema (bad verdict or empty reason)"
         elif verdict == "allow":
             result["note"] = "WRONG: should be escalate or deny"
     if result["finish"] == "length":
@@ -137,7 +144,7 @@ def main() -> None:
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     raw = "--raw" in sys.argv
     headers = {"Authorization": f"Bearer {API_KEY}", "Accept": "application/json"}
-    with httpx.Client(headers=headers, timeout=90) as client:
+    with httpx.Client(headers=headers, timeout=float(os.getenv("NIM_TIMEOUT", "90"))) as client:
         if not args:
             list_models(client)
             print("Test models with: uv run python check_nim.py MODEL [MODEL ...]")
