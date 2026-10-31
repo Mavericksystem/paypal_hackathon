@@ -62,3 +62,14 @@ def rules_check(case: dict, policy: dict) -> list[str]:
     if req["amount_minor"] > budget:
         failed.append("over remaining budget")
     return failed
+
+def build_messages(case: dict) -> list[dict]:
+    req = case["request"]
+    amount = f"{req['amount_minor'] / 100:.2f} {req['currency']}"
+    user = (
+        f"User goal: {case['user_goal']}\n"
+        f"Payment request: item={req['item']!r}, quantity={req['quantity']}, "
+        f"amount={amount}, merchant={req['merchant']}\n"
+        f"Seller text (untrusted):\n<<<\n{case['seller_text']}\n>>>"
+    )
+    return [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": user}]
