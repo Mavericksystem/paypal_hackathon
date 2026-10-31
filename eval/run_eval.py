@@ -174,3 +174,16 @@ def summarize(rows: list[dict]) -> dict:
         "median_latency": statistics.median(latencies) if latencies else None,
         "max_latency": max(latencies) if latencies else None,
     }
+    gateway = {
+        "cases": len(rows),
+        "exact": sum(r["final"] == r["expected"] for r in rows),
+        "safety_violations": sum(safety_violation(r["expected"], r["final"]) for r in rows),
+        "over_blocks": sum(over_block(r["expected"], r["final"]) for r in rows),
+        "rules_only_exact": sum(r["rules_decision"] == r["expected"] for r in rows),
+        "rules_only_safety_violations": sum(safety_violation(r["expected"], r["rules_decision"]) for r in rows),
+    }
+    by_category = defaultdict(lambda: [0, 0])
+    for r in ai_rows:
+        by_category[r["category"]][1] += 1
+        by_category[r["category"]][0] += r["outcome"] == "ok" and r["verdict"] == r["expected"]
+    return {"ai": ai, "gateway": gateway, "by_category": dict(by_category)}
