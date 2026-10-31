@@ -231,3 +231,26 @@ def main() -> None:
     if args.split in ("test", "all") and not args.final:
         sys.exit("ERROR: the held-out test split needs --final. Tune prompts on dev only, "
                  "then score the final model on test once.")
+
+    raw_bytes = CASES_PATH.read_bytes()
+    data = json.loads(raw_bytes.decode("utf-8"))
+    policy = data["policy"]
+    cases = [c for c in data["cases"] if args.split == "all" or c["split"] == args.split]
+    if args.limit:
+        cases = cases[: args.limit]
+ 
+    rows = []
+    headers = {"Authorization": f"Bearer {API_KEY}", "Accept": "application/json"}
+    with httpx.Client(headers=headers, timeout=TIMEOUT) as client:
+        for i, case in enumerate(cases, 1):
+            failed_rules = rules_check(case, policy)
+            rules_decision = "deny" if failed_rules else "allow"
+            row = {"id": case["id"], "category": case["category"], "split": case["split"],
+                   "expected": case["expected"], "rules_decision": rules_decision,
+                   "failed_rules": failed_rules, "ai_called": False, "outcome": "skipped",
+                   "verdict": None, "reason": None, "latency": None, "error": None,
+                   "finish_reason": None, "content": "", "reasoning_chars": 0,
+                   "completion_tokens": None, "reasoning_tokens": None}
+            if failed_rules:
+                row["final"] = "deny"
+                print(f"[{i}/{len(cases)}] {case['id']}: rules deny ({'; '.join(failed_rules)}), AI not called")
