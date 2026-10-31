@@ -254,3 +254,13 @@ def main() -> None:
             if failed_rules:
                 row["final"] = "deny"
                 print(f"[{i}/{len(cases)}] {case['id']}: rules deny ({'; '.join(failed_rules)}), AI not called")
+
+            else:
+                row["ai_called"] = True
+                row.update(call_model(client, args.model, case))
+                ai_verdict = row["verdict"] if row["outcome"] == "ok" else "escalate"  # fail closed
+                row["final"] = stricter(rules_decision, ai_verdict)
+                shown = row["verdict"] if row["outcome"] == "ok" else row["outcome"]
+                latency = f"{row['latency']:.1f}s" if row["latency"] is not None else "-"
+                print(f"[{i}/{len(cases)}] {case['id']}: expected={case['expected']:<8} got={shown:<14} {latency}")
+            rows.append(row)
