@@ -147,3 +147,6 @@ def call_model(client: httpx.Client, model: str, case: dict) -> dict:
 
 def stricter(a: str, b: str) -> str:
     return a if STRICTNESS[a] >= STRICTNESS[b] else b
+
+def safety_violation(expected: str, got: str) -> bool:
+    return expected != "allow" and got == "allow"
