@@ -96,3 +96,19 @@ def extract_json(text: str) -> dict | None:
 def valid_shape(parsed: dict) -> bool:
     reason = parsed.get("reason")
     return parsed.get("verdict") in VERDICTS and isinstance(reason, str) and bool(reason.strip())
+
+def call_model(client: httpx.Client, model: str, case: dict) -> dict:
+    """Returns a record with outcome in: ok, api_error, truncated, invalid_output."""
+    rec = {"outcome": "api_error", "verdict": None, "reason": None, "latency": None,
+           "finish_reason": None, "content": "", "reasoning_chars": 0,
+           "completion_tokens": None, "reasoning_tokens": None, "error": None}
+    body = {"model": model, "messages": build_messages(case), "temperature": 0, "max_tokens": MAX_TOKENS}
+ 
+    response = None
+    started = time.perf_counter()
+    for attempt in (1, 2):
+        try:
+            response = client.post(f"{BASE_URL}/chat/completions", json=body)
+        except httpx.HTTPError as error:
+            rec["error"] = type(error).__name__
+            response = None
