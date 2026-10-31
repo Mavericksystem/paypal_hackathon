@@ -112,3 +112,15 @@ def call_model(client: httpx.Client, model: str, case: dict) -> dict:
         except httpx.HTTPError as error:
             rec["error"] = type(error).__name__
             response = None
+        else:
+            if response.status_code in (429, 500, 502, 503, 504) and attempt == 1:
+                time.sleep(float(os.getenv("NIM_RETRY_WAIT", "5")))
+                continue
+        break
+    rec["latency"] = time.perf_counter() - started
+ 
+    if response is None:
+        return rec
+    if response.status_code != 200:
+        rec["error"] = f"HTTP {response.status_code}"
+        return rec
