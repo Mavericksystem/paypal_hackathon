@@ -153,3 +153,8 @@ def safety_violation(expected: str, got: str) -> bool:
 
 def over_block(expected: str, got: str) -> bool:
     return expected == "allow" and got != "allow"
+
+def summarize(rows: list[dict]) -> dict:
+    ai_rows = [r for r in rows if r["ai_called"]]
+    scored = [r for r in ai_rows if r["outcome"] == "ok"]
+    latencies = [r["latency"] for r in ai_rows if r["latency"] is not None]
