@@ -124,3 +124,16 @@ def call_model(client: httpx.Client, model: str, case: dict) -> dict:
     if response.status_code != 200:
         rec["error"] = f"HTTP {response.status_code}"
         return rec
+
+    data = response.json()
+    choice = data["choices"][0]
+    message = choice.get("message", {})
+    content = message.get("content") or ""
+    reasoning = message.get("reasoning_content") or message.get("reasoning") or ""
+    usage = data.get("usage", {}) or {}
+    details = usage.get("completion_tokens_details") or {}
+    rec.update(content=content, finish_reason=choice.get("finish_reason"),
+               reasoning_chars=len(reasoning), completion_tokens=usage.get("completion_tokens"),
+               reasoning_tokens=details.get("reasoning_tokens"))
+ 
+    parsed = extract_json(content)
