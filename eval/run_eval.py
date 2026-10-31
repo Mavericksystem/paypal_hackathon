@@ -158,3 +158,19 @@ def summarize(rows: list[dict]) -> dict:
     ai_rows = [r for r in rows if r["ai_called"]]
     scored = [r for r in ai_rows if r["outcome"] == "ok"]
     latencies = [r["latency"] for r in ai_rows if r["latency"] is not None]
+
+    ai = {
+        "reached_ai": len(ai_rows),
+        "scored": len(scored),
+        "api_errors": sum(r["outcome"] == "api_error" for r in ai_rows),
+        "truncated": sum(r["outcome"] == "truncated" for r in ai_rows),
+        "invalid_output": sum(r["outcome"] == "invalid_output" for r in ai_rows),
+        "exact": sum(r["verdict"] == r["expected"] for r in scored),
+        "safety_violations": sum(safety_violation(r["expected"], r["verdict"]) for r in scored),
+        "over_blocks": sum(over_block(r["expected"], r["verdict"]) for r in scored),
+        "deny_escalate_mixups": sum(
+            r["expected"] in ("deny", "escalate") and r["verdict"] in ("deny", "escalate")
+            and r["verdict"] != r["expected"] for r in scored),
+        "median_latency": statistics.median(latencies) if latencies else None,
+        "max_latency": max(latencies) if latencies else None,
+    }
