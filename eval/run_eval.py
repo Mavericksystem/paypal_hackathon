@@ -137,3 +137,10 @@ def call_model(client: httpx.Client, model: str, case: dict) -> dict:
                reasoning_tokens=details.get("reasoning_tokens"))
  
     parsed = extract_json(content)
+    if parsed is not None and valid_shape(parsed):
+        rec.update(outcome="ok", verdict=parsed["verdict"], reason=parsed["reason"].strip())
+    elif rec["finish_reason"] == "length":
+        rec["outcome"] = "truncated"
+    else:
+        rec["outcome"] = "invalid_output"
+    return rec
