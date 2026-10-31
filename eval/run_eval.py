@@ -216,3 +216,18 @@ def print_report(meta: dict, rows: list[dict], s: dict) -> None:
             got = r["verdict"] if r["outcome"] == "ok" else f"<{r['outcome']}{' ' + r['error'] if r['error'] else ''}>"
             print(f"  {r['id']}  expected={r['expected']:<8} got={got:<10} {(r['reason'] or '')[:70]}")
     print("=" * 72)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("model")
+    parser.add_argument("--split", choices=["dev", "test", "all"], default="dev")
+    parser.add_argument("--final", action="store_true", help="required for the test and all splits")
+    parser.add_argument("--limit", type=int, default=0, help="only run the first N cases (smoke test)")
+    args = parser.parse_args()
+ 
+    if not API_KEY:
+        sys.exit("ERROR: NVIDIA_API_KEY is not set. Put it in eval/.env")
+    if args.split in ("test", "all") and not args.final:
+        sys.exit("ERROR: the held-out test split needs --final. Tune prompts on dev only, "
+                 "then score the final model on test once.")
