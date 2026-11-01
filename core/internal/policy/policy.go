@@ -54,3 +54,20 @@ func Evaluate(p Policy, r Request) Result {
 	}
 	return res
 }
+
+func deny(code, reason string) Result {
+	return Result{Verdict: Deny, Code: code, Reason: reason}
+}
+
+func merchantAllowed(allowed []string, merchant string) bool {
+	m := strings.ToLower(strings.TrimSpace(merchant))
+	if m == "" {
+		return false
+	}
+	for _, a := range allowed {
+		if strings.ToLower(strings.TrimSpace(a)) == m {
+			return true
+		}
+	}
+	return false
+}
