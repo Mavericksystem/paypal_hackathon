@@ -1,5 +1,7 @@
 package policy
 
+import "strings"
+
 type Verdict string
 
 const (
@@ -44,3 +46,11 @@ func Evaluate(p Policy, r Request) Result {
 	if r.Amount > r.BudgetRemaining {
 		return deny("over_budget", "amount exceeds the remaining budget")
 	}
+
+	res := Result{Verdict: Pass, Code: "ok", Reason: "all rules passed"}
+	if p.AutoApproveMax > 0 && r.Amount > p.AutoApproveMax {
+		res.NeedsHuman = true
+		res.Reason = "rules passed, amount above auto-approve limit"
+	}
+	return res
+}
