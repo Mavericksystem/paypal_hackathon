@@ -20,3 +20,10 @@ type Request struct {
 	Currency        string
 	BudgetRemaining int64 // remaining budget for this agent, from the ledger
 }
+
+type Result struct {
+	Verdict    Verdict
+	Code       string
+	Reason     string
+	NeedsHuman bool // true when Pass but amount is above AutoApproveMax
+}
