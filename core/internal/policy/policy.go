@@ -27,3 +27,11 @@ type Result struct {
 	Reason     string
 	NeedsHuman bool // true when Pass but amount is above AutoApproveMax
 }
+
+func Evaluate(p Policy, r Request) Result {
+	if r.Amount <= 0 {
+		return deny("invalid_amount", "amount must be greater than zero")
+	}
+	if !strings.EqualFold(strings.TrimSpace(r.Currency), strings.TrimSpace(p.Currency)) {
+		return deny("currency_not_allowed", "currency does not match the policy")
+	}
