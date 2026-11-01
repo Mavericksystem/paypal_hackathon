@@ -35,3 +35,12 @@ func Evaluate(p Policy, r Request) Result {
 	if !strings.EqualFold(strings.TrimSpace(r.Currency), strings.TrimSpace(p.Currency)) {
 		return deny("currency_not_allowed", "currency does not match the policy")
 	}
+	if !merchantAllowed(p.AllowedMerchants, r.Merchant) {
+		return deny("merchant_not_allowed", "merchant is not on the allowlist")
+	}
+	if p.MaxPerPayment > 0 && r.Amount > p.MaxPerPayment {
+		return deny("over_payment_limit", "amount exceeds the per-payment maximum")
+	}
+	if r.Amount > r.BudgetRemaining {
+		return deny("over_budget", "amount exceeds the remaining budget")
+	}
