@@ -13,3 +13,10 @@ type Policy struct {
 	MaxPerPayment    int64
 	AutoApproveMax   int64
 }
+
+type Request struct {
+	Merchant        string
+	Amount          int64
+	Currency        string
+	BudgetRemaining int64 // remaining budget for this agent, from the ledger
+}
