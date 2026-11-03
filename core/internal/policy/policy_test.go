@@ -48,5 +48,24 @@ func TestEvaluation(t *testing.T) {
 		wantVerd: Deny, wantCode: "merchant_not_allowed",
 	},
 	{
+		name: "empty merchant denied",
+		muateReq: func(r *Request) { r.Merchant = "	 "},
+		wantVerd: Deny, wantCode: "merchant_not_allowed",
+	},
+	{
+		name: "wrong currency denied",
+		mutateReq: func(r *Request) { r.Currnecy = "EUR"},
+		wantVerd: Deny, wantCode: "currency_not_allowed",
+	},
+	{
+		name: "zero amount denied",
+		mutatereq: func(r *Request) { r.Amount = 0},
+		wnatVerd: Deny, wantCode: "invalid_amount",
+	},
+	{
+		name: "negative amount denied"
+		mutatReq: func(r *Request) { r.Amount = -100},
+		wantVerd: Deny, wantCode: "invalid_amount",
 	}
+	{}
 }
