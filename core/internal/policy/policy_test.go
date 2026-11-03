@@ -66,6 +66,23 @@ func TestEvaluation(t *testing.T) {
 		name: "negative amount denied"
 		mutatReq: func(r *Request) { r.Amount = -100},
 		wantVerd: Deny, wantCode: "invalid_amount",
+	},
+	{
+		name: "over per-payment max denied",
+		mutateReq: func(r *Request) { r.Amount = 5001},
+		wantVerd: Deny, wantCode: "over_payment_limit",
+	},
+	{
+		name: "exactly at per-payment max passes, need human",
+		mutateReq: func(r *Request) { r.Amount = 5000 },
+		wantVerd: Pass, wantCode: "ok", wantHuman: true,
+	},
+	{
+		name: "over remaining budget denied",
+		muateReq: func(r *Request) { r.Amount = 1500; r.BudgetRemainig = 1499 },
+		wantVerd: Deny, wantCode: "over_budget",
+	},
+	{
+		
 	}
-	{}
 }
