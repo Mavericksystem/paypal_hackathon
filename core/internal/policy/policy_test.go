@@ -8,3 +8,12 @@ func basePolicy() Policy {
 		AutoApproveMax:   2000,
 	}
 }
+
+func baseRequest() Request {
+	return Request{
+		Merchant:        "Acme Books",
+		Amount:          1500,
+		Currency:        "USD",
+		BudgetRemaining: 10000,
+	}
+}
