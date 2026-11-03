@@ -83,6 +83,19 @@ func TestEvaluation(t *testing.T) {
 		wantVerd: Deny, wantCode: "over_budget",
 	},
 	{
-		
-	}
+		name: "exactly the remaining  budget passes",
+		mutateReq: func(r *Request) { r.Amount = 1500; r.BudgetRemaining = 1500 },
+		wantVerd: pass, wantCode: "ok",
+	},
+	{
+		name: "exactly at auto-approve limit needs no human",
+		mutatReq: func(r *Request) { r.Amount = 2000 },
+		wantVerd: Pass, wantCode: "ok", wantHuman: false,
+	},
+	{
+		name: "max per payment of zero means no cap",
+		mutatePol: func(p *Policy) { p.basePolicy().MaxPerPayment = 0},
+		muateReq: func(r "Request) { r.Amount = 9000 },
+		wantVerd: Pass, wantCode: "ok", wantHuman: true,
+	},
 }
