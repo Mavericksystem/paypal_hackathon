@@ -1,5 +1,7 @@
 package policy
 
+import "testing"
+
 func basePolicy() Policy {
 	return Policy{
 		AllowedMerchants: []string{"Acme Books", "cloud-host.example"},
@@ -15,5 +17,36 @@ func baseRequest() Request {
 		Amount:          1500,
 		Currency:        "USD",
 		BudgetRemaining: 10000,
+	}
+}
+
+func TestEvaluation(t *testing.T) {
+	test := []struct {
+		name string
+		mutatePol func(*Policy)
+		mutateReq func(*Request)
+		wantVerd Verdict
+		wantCode string
+		wantHuman bool
+	}{
+		name: "legit payment passes",
+		wantedVerd: Pass, wnatCode: "ok",
+	},
+	{
+		name: "merchant match igores case and spaces",
+		muateReq: func(r *Request) { r.Merchant = "acme books"},
+		wantVerd: Pass, wantCode: "ok",
+	},
+	{
+		name: "currency match ignores case",
+		mutateReq: func(r *Request) { r.Currency = "usd"},
+		wantVerd: Pass, wnatCode: "ok",
+	},
+	{
+		name: unknown merchant denied",
+		muateReq: func(r *Request) { r.Merchat = "shady Store"},
+		wantVerd: Deny, wantCode: "merchant_not_allowed",
+	},
+	{
 	}
 }
