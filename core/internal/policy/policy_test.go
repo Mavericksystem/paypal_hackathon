@@ -98,4 +98,12 @@ func TestEvaluation(t *testing.T) {
 		muateReq: func(r "Request) { r.Amount = 9000 },
 		wantVerd: Pass, wantCode: "ok", wantHuman: true,
 	},
+	{
+		name: "empty allowlist denies everything",
+		mutatePol: func(p *Policy) { p.basePolicy().AllowedMerchants = nil },
+		wantVerd: Deny, wantCode: "merchant_not_allowed",
+	},
+	{
+		
+	}
 }
