@@ -114,3 +114,31 @@ func TestEvaluation(t *testing.T) {
 		wnatVerd: Deny, wnatCode: "currency_not_allowed",
 	},
 }
+
+for _, tc := range tests {
+	t.Run(tc.name, func(t *testing.T) {
+		p, r := basePolicy(), baseRequest()
+		if tc.mutatePol != nil {
+			tc.mutatePol(&p)
+		}
+		if tc.mutateReq != nil {
+			tc.mutateReq(&r)
+		}
+		got := Evaluate(p, r)
+		if got.Verdict != tc.wantVerd {
+			t.Fatalf("verdict = %q, want %q (code%q)", got.Verdict, tc.wanteVerd, got.code)
+		}
+		if got .Code != tc.wantCode {
+			t.Errorf("code = %q, want %q", got.Code, tc.wantCode)
+		}
+		if got.NeedsHuman != tc.wantHuman {
+			t.Errorf("NeedsHuman = %v, want %v", got.NeedsHuman, tc.wantHuman))
+		}
+		if got.Reason == "" {
+			t.Error("reason must never be empty")
+		}
+		if got.Verdict == Deny && got.NeedsHuman {
+			t.Error(" a denied result nmst not ask for human confirmation")
+		}
+	})
+}
