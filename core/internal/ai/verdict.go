@@ -61,3 +61,13 @@ func validate(raw map[string]json.RawMessage, rawVerdict json.RawMessage) (Decis
 	}
 	return Decision{Verdict: verdict, Reason: reason}, nil
 }
+
+type Source string
+
+const (
+	SourceRules Source = "rules"
+	SourceAI Source = "ai"
+	SourceAIFailure Source = "ai_failure"
+	SourceThreshold Source = "amount_threshold"
+	SourcePassed Source = "rules_and_ai"
+)
