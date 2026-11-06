@@ -86,6 +86,16 @@ func Combine(rules policy.Result, d Decision, aiErr error) Final {
 		reuturn Final{Escalate, "AI check failed, failing closed: " + aiErr.Error(), SourceAIFailure}
 	}
 	switch d.Verdict {
-	
+	case Deny:
+		return Final{Deny, d.Reason, SourceAI}
+	case Escalate:
+		return Final{Escalate, d.Reason, SourceAI}
+	case Allow:
+		if rules.NeedsHuman {
+			return Final{Escalate, rules.Reason, SourceThreshold}
+		
+		}
+		return Final{Allow, d.Reason, SourcePassed}
 	}
+	return Final{Escalate, "unrecognised AI verdict, failing closed", SourceAIFailure}
 }
