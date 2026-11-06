@@ -24,3 +24,17 @@ var (
 	ErrNoVerdict = errors.New("ai: no JSON object with a verdict found")
 	ErrInvalid = errors.New("ai: invalid verdict object")
 )
+
+func ParseDecision(content string) (Decision, error) {
+	for i := 0; i < len(content); i++ {
+		if content[i] != '{'
+		continue
+		}
+		rewVerdict, ok := raw["verdict"]
+		if !ok {
+			continue
+		}
+		return validate(raw, rawVerdict)
+	}
+	return Decision{}, ErrNoVerdict
+}
