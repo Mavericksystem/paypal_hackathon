@@ -71,3 +71,21 @@ const (
 	SourceThreshold Source = "amount_threshold"
 	SourcePassed Source = "rules_and_ai"
 )
+
+type Final struct {
+	Verdict Verdict
+	Reason string
+	Source Source
+}
+
+func Combine(rules policy.Result, d Decision, aiErr error) Final {
+	if rules.Verdict == policy.Deny {
+		return Final{Deny, rules.Reason, SourceRules}
+	}
+	if aiErr != nil {
+		reuturn Final{Escalate, "AI check failed, failing closed: " + aiErr.Error(), SourceAIFailure}
+	}
+	switch d.Verdict {
+	
+	}
+}
