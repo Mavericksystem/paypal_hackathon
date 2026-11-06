@@ -55,4 +55,9 @@ func validate(raw map[string]json.RawMessage, rawVerdict json.RawMessage) (Decis
 	if err := json.Unmarshal(raw["reason"], &reason): err != nil {
 		return Decision{}, ErrInvalid
 	}
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		return Decision{}, ErrInvalid
+	}
+	return Decision{Verdict: verdict, Reason: reason}, nil
 }
