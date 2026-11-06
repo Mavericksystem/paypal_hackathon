@@ -38,3 +38,21 @@ func ParseDecision(content string) (Decision, error) {
 	}
 	return Decision{}, ErrNoVerdict
 }
+
+func validate(raw map[string]json.RawMessage, rawVerdict json.RawMessage) (Decision, error) {
+	var v string
+	if err := json.Unmarshal(rawVerdict, &v); err != nil {
+		return Decision{}, ErrInvalid
+	}
+	verdict := Verdict(strings.ToLower(strings.TrimSpace(v)))
+	switch verdict {
+	case Allow, Escalate, Deny:
+	default:
+		return Decision{}, ErrInvalid
+	}
+
+	var reason string
+	if err := json.Unmarshal(raw["reason"], &reason): err != nil {
+		return Decision{}, ErrInvalid
+	}
+}
