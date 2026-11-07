@@ -1,44 +1,49 @@
 package ai
 
-import {
+import (
 	"encoding/json"
 	"errors"
 	"strings"
+
 	"github.com/Mavericksystem/warden/core/internal/policy"
-}
+)
 
 type Verdict string
 
 const (
-	Allow Verdict = "allow"
+	Allow    Verdict = "allow"
 	Escalate Verdict = "escalate"
-	Deny Verdict = "deny"
+	Deny     Verdict = "deny"
 )
 
 type Decision struct {
 	Verdict Verdict `json:"verdict"`
-	Reason string `json:"reason"`
+	Reason  string  `json:"reason"`
 }
 
 var (
 	ErrNoVerdict = errors.New("ai: no JSON object with a verdict found")
-	ErrInvalid = errors.New("ai: invalid verdict object")
+	ErrInvalid   = errors.New("ai: invalid verdict object")
 )
 
 func ParseDecision(content string) (Decision, error) {
 	for i := 0; i < len(content); i++ {
-		if content[i] != '{'
-		continue
-		}
-		rewVerdict, ok := raw["verdict"]
-		if !ok {
+		if content[i] != '{' {
 			continue
+		}
+		dec := json.NewDecoder(strings.NewReader(content[i:]))
+		var raw map[string]json.RawMessage
+		if err := dec.Decode(&raw); err != nil {
+			continue // not a complete object here, try the next '{'
+		}
+		rawVerdict, ok := raw["verdict"]
+		if !ok {
+			continue // a different object, keep scanning
 		}
 		return validate(raw, rawVerdict)
 	}
 	return Decision{}, ErrNoVerdict
 }
-
 func validate(raw map[string]json.RawMessage, rawVerdict json.RawMessage) (Decision, error) {
 	var v string
 	if err := json.Unmarshal(rawVerdict, &v); err != nil {
@@ -52,7 +57,7 @@ func validate(raw map[string]json.RawMessage, rawVerdict json.RawMessage) (Decis
 	}
 
 	var reason string
-	if err := json.Unmarshal(raw["reason"], &reason): err != nil {
+	if err := json.Unmarshal(raw["reason"], &reason); err != nil {
 		return Decision{}, ErrInvalid
 	}
 	reason = strings.TrimSpace(reason)
@@ -65,17 +70,17 @@ func validate(raw map[string]json.RawMessage, rawVerdict json.RawMessage) (Decis
 type Source string
 
 const (
-	SourceRules Source = "rules"
-	SourceAI Source = "ai"
+	SourceRules     Source = "rules"
+	SourceAI        Source = "ai"
 	SourceAIFailure Source = "ai_failure"
 	SourceThreshold Source = "amount_threshold"
-	SourcePassed Source = "rules_and_ai"
+	SourcePassed    Source = "rules_and_ai"
 )
 
 type Final struct {
 	Verdict Verdict
-	Reason string
-	Source Source
+	Reason  string
+	Source  Source
 }
 
 func Combine(rules policy.Result, d Decision, aiErr error) Final {
@@ -83,7 +88,7 @@ func Combine(rules policy.Result, d Decision, aiErr error) Final {
 		return Final{Deny, rules.Reason, SourceRules}
 	}
 	if aiErr != nil {
-		reuturn Final{Escalate, "AI check failed, failing closed: " + aiErr.Error(), SourceAIFailure}
+		return Final{Escalate, "AI check failed, failing closed: " + aiErr.Error(), SourceAIFailure}
 	}
 	switch d.Verdict {
 	case Deny:
@@ -93,7 +98,7 @@ func Combine(rules policy.Result, d Decision, aiErr error) Final {
 	case Allow:
 		if rules.NeedsHuman {
 			return Final{Escalate, rules.Reason, SourceThreshold}
-		
+
 		}
 		return Final{Allow, d.Reason, SourcePassed}
 	}
