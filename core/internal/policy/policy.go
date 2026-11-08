@@ -1,7 +1,5 @@
 package policy
 
-import "strings"
-
 type Verdict string
 
 const (
@@ -10,7 +8,7 @@ const (
 )
 
 type Policy struct {
-	AllowedMerchants []string // exact match, case-insensitive
+	AllowedMerchants []string // exact, case-sensitive match
 	Currency         string   // e.g. "USD"
 	MaxPerPayment    int64
 	AutoApproveMax   int64
@@ -34,7 +32,7 @@ func Evaluate(p Policy, r Request) Result {
 	if r.Amount <= 0 {
 		return deny("invalid_amount", "amount must be greater than zero")
 	}
-	if !strings.EqualFold(strings.TrimSpace(r.Currency), strings.TrimSpace(p.Currency)) {
+	if r.Currency != p.Currency {
 		return deny("currency_not_allowed", "currency does not match the policy")
 	}
 	if !merchantAllowed(p.AllowedMerchants, r.Merchant) {
@@ -60,12 +58,11 @@ func deny(code, reason string) Result {
 }
 
 func merchantAllowed(allowed []string, merchant string) bool {
-	m := strings.ToLower(strings.TrimSpace(merchant))
-	if m == "" {
+	if merchant == "" {
 		return false
 	}
 	for _, a := range allowed {
-		if strings.ToLower(strings.TrimSpace(a)) == m {
+		if a == merchant {
 			return true
 		}
 	}
