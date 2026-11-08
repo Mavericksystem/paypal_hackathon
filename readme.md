@@ -1,6 +1,6 @@
 # paypal_hackathon
 
-The NIM evaluator uses `openai/gpt-oss-20b` by default. Set `NIM_MODEL` or pass
+The NIM evaluator uses `` by default. Set `NIM_MODEL` or pass
 another model ID as the first argument to test a different model:
 
 ```powershell
