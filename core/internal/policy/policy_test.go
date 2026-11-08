@@ -6,8 +6,8 @@ func basePolicy() Policy {
 	return Policy{
 		AllowedMerchants: []string{"Acme Books", "cloud-host.example"},
 		Currency:         "USD",
-		MaxPerPayment:    5000,
-		AutoApproveMax:   2000,
+		MaxPerPayment:    5000, // $50.00
+		AutoApproveMax:   2000, // $20.00
 	}
 }
 
@@ -34,14 +34,19 @@ func TestEvaluate(t *testing.T) {
 			wantVerd: Pass, wantCode: "ok",
 		},
 		{
-			name:      "merchant match ignores case and spaces",
-			mutateReq: func(r *Request) { r.Merchant = "  acme books " },
-			wantVerd:  Pass, wantCode: "ok",
+			name:      "merchant with different case denied",
+			mutateReq: func(r *Request) { r.Merchant = "acme books" },
+			wantVerd:  Deny, wantCode: "merchant_not_allowed",
 		},
 		{
-			name:      "currency match ignores case",
+			name:      "merchant with extra spaces denied",
+			mutateReq: func(r *Request) { r.Merchant = " Acme Books " },
+			wantVerd:  Deny, wantCode: "merchant_not_allowed",
+		},
+		{
+			name:      "currency with different case denied",
 			mutateReq: func(r *Request) { r.Currency = "usd" },
-			wantVerd:  Pass, wantCode: "ok",
+			wantVerd:  Deny, wantCode: "currency_not_allowed",
 		},
 		{
 			name:      "unknown merchant denied",
