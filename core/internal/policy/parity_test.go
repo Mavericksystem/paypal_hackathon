@@ -30,3 +30,10 @@ func TestParityWithEvalCases(t *testing.T) {
 	if len(f.Cases) != 30 {
 		t.Fatalf("expected 30 cases, got %d", len(f.Cases))
 	}
+
+	pol := Policy{
+		AllowedMerchants: f.Policy.Allowlist,
+		Currency:         f.Policy.Currency,
+		MaxPerPayment:    f.Policy.MaxPaymentMinor,
+		AutoApproveMax:   0,
+	}
