@@ -18,3 +18,15 @@ type casesFile struct {
 		BudgetRemainingMinor *int64 `json:"budget_remaining_minor"`
 	} `json:"cases"`
 }
+func TestParityWithEvalCases(t *testing.T) {
+	raw, err := os.ReadFile("../../../eval/cases.json")
+	if err != nil {
+		t.Fatalf("cannot read eval/cases.json: %v", err)
+	}
+	var f casesFile
+	if err := json.Unmarshal(raw, &f); err != nil {
+		t.Fatalf("cannot parse eval/cases.json: %v", err)
+	}
+	if len(f.Cases) != 30 {
+		t.Fatalf("expected 30 cases, got %d", len(f.Cases))
+	}
