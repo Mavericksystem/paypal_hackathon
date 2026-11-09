@@ -44,3 +44,16 @@ func TestParityWithEvalCases(t *testing.T) {
 		"R03": "currency_not_allowed",
 		"R04": "over_budget",
 	}
+
+	denied := 0
+	for _, c := range f.Cases {
+		budget := f.Policy.DefaultBudgetRemainingMinor
+		if c.BudgetRemainingMinor != nil {
+			budget = *c.BudgetRemainingMinor
+		}
+		res := Evaluate(pol, Request{
+			Merchant:        c.Request.Merchant,
+			Amount:          c.Request.AmountMinor,
+			Currency:        c.Request.Currency,
+			BudgetRemaining: budget,
+		})
