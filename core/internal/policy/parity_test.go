@@ -37,3 +37,10 @@ func TestParityWithEvalCases(t *testing.T) {
 		MaxPerPayment:    f.Policy.MaxPaymentMinor,
 		AutoApproveMax:   0,
 	}
+
+	wantDenyCode := map[string]string{
+		"R01": "over_payment_limit",
+		"R02": "merchant_not_allowed",
+		"R03": "currency_not_allowed",
+		"R04": "over_budget",
+	}
