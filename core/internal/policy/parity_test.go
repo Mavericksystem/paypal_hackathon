@@ -1,5 +1,11 @@
 package policy
 
+import (
+	"encoding/json"
+	"os"
+	"testing"
+)
+
 type casesFile struct {
 	Policy struct {
 		Allowlist                   []string `json:"allowlist"`
@@ -18,6 +24,7 @@ type casesFile struct {
 		BudgetRemainingMinor *int64 `json:"budget_remaining_minor"`
 	} `json:"cases"`
 }
+
 func TestParityWithEvalCases(t *testing.T) {
 	raw, err := os.ReadFile("../../../eval/cases.json")
 	if err != nil {
@@ -57,3 +64,21 @@ func TestParityWithEvalCases(t *testing.T) {
 			Currency:        c.Request.Currency,
 			BudgetRemaining: budget,
 		})
+
+		wantCode, shouldDeny := wantDenyCode[c.ID]
+		if shouldDeny {
+			denied++
+			if res.Verdict != Deny || res.Code != wantCode {
+				t.Errorf("%s: got %s/%s, want deny/%s", c.ID, res.Verdict, res.Code, wantCode)
+			}
+			continue
+		}
+		if res.Verdict != Pass {
+			t.Errorf("%s (%s): rules denied (%s), but the evaluation sent it to the AI", c.ID, c.Category, res.Code)
+		}
+	}
+
+	if denied != 4 {
+		t.Errorf("rules denied %d cases, want exactly 4 (R01 to R04)", denied)
+	}
+}
