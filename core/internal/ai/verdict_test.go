@@ -46,3 +46,23 @@ func TestParseDecision(t *testing.T) {
 			content:     `{"verdict":"deny","reason":"first"} {"verdict":"allow","reason":"second"}`,
 			wantVerdict: Deny, wantReason: "first",
 		},
+		{
+			name:        "verdict is normalised to lower case and trimmed",
+			content:     `{"verdict":"  ALLOW ","reason":"ok"}`,
+			wantVerdict: Allow, wantReason: "ok",
+		},
+		{
+			name:        "reason is trimmed",
+			content:     `{"verdict":"allow","reason":"  fine  "}`,
+			wantVerdict: Allow, wantReason: "fine",
+		},
+		{
+			name:    "missing reason",
+			content: `{"verdict":"allow"}`,
+			wantErr: ErrInvalid,
+		},
+		{
+			name:    "empty reason",
+			content: `{"verdict":"allow","reason":""}`,
+			wantErr: ErrInvalid,
+		},
