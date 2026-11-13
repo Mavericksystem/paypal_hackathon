@@ -66,3 +66,23 @@ func TestParseDecision(t *testing.T) {
 			content: `{"verdict":"allow","reason":""}`,
 			wantErr: ErrInvalid,
 		},
+		{
+			name:    "whitespace reason",
+			content: `{"verdict":"allow","reason":"   "}`,
+			wantErr: ErrInvalid,
+		},
+		{
+			name:    "reason is not a string",
+			content: `{"verdict":"allow","reason":42}`,
+			wantErr: ErrInvalid,
+		},
+		{
+			name:    "unknown verdict value",
+			content: `{"verdict":"approve","reason":"ok"}`,
+			wantErr: ErrInvalid,
+		},
+		{
+			name:    "verdict is not a string",
+			content: `{"verdict":1,"reason":"ok"}`,
+			wantErr: ErrInvalid,
+		},
