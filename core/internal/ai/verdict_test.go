@@ -86,3 +86,24 @@ func TestParseDecision(t *testing.T) {
 			content: `{"verdict":1,"reason":"ok"}`,
 			wantErr: ErrInvalid,
 		},
+		{
+			name:    "no json at all",
+			content: `I think this payment is fine.`,
+			wantErr: ErrNoVerdict,
+		},
+		{
+			name:    "json without a verdict key",
+			content: `{"decision":"allow","reason":"ok"}`,
+			wantErr: ErrNoVerdict,
+		},
+		{
+			name:    "truncated json",
+			content: `{"verdict":"allow","reason":"cut off`,
+			wantErr: ErrNoVerdict,
+		},
+		{
+			name:    "empty content",
+			content: ``,
+			wantErr: ErrNoVerdict,
+		},
+	}
