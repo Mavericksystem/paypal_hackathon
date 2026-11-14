@@ -107,3 +107,25 @@ func TestParseDecision(t *testing.T) {
 			wantErr: ErrNoVerdict,
 		},
 	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := ParseDecision(tc.content)
+			if tc.wantErr != nil {
+				if !errors.Is(err, tc.wantErr) {
+					t.Fatalf("err = %v, want %v", err, tc.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got.Verdict != tc.wantVerdict {
+				t.Errorf("verdict = %q, want %q", got.Verdict, tc.wantVerdict)
+			}
+			if got.Reason != tc.wantReason {
+				t.Errorf("reason = %q, want %q", got.Reason, tc.wantReason)
+			}
+		})
+	}
+}
