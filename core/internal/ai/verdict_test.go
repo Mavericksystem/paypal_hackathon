@@ -129,3 +129,22 @@ func TestParseDecision(t *testing.T) {
 		})
 	}
 }
+
+var (
+	rulesPass  = policy.Result{Verdict: policy.Pass, Code: "ok", Reason: "all rules passed"}
+	rulesHuman = policy.Result{Verdict: policy.Pass, Code: "ok", Reason: "amount above auto-approve limit", NeedsHuman: true}
+	rulesDeny  = policy.Result{Verdict: policy.Deny, Code: "merchant_not_allowed", Reason: "merchant is not on the allowlist"}
+)
+
+func TestCombine(t *testing.T) {
+	errTimeout := errors.New("timeout")
+
+	tests := []struct {
+		name       string
+		rules      policy.Result
+		dec        Decision
+		aiErr      error
+		wantVerd   Verdict
+		wantSource Source
+		wantReason string // exact match, empty means skip
+	}{
