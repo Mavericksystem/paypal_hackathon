@@ -148,3 +148,23 @@ func TestCombine(t *testing.T) {
 		wantSource Source
 		wantReason string // exact match, empty means skip
 	}{
+		{
+			name:  "rules deny, AI allow cannot loosen it",
+			rules: rulesDeny, dec: Decision{Allow, "looks fine"},
+			wantVerd: Deny, wantSource: SourceRules, wantReason: rulesDeny.Reason,
+		},
+		{
+			name:  "rules deny, AI error does not matter",
+			rules: rulesDeny, aiErr: errTimeout,
+			wantVerd: Deny, wantSource: SourceRules, wantReason: rulesDeny.Reason,
+		},
+		{
+			name:  "rules pass, AI allow",
+			rules: rulesPass, dec: Decision{Allow, "matches goal"},
+			wantVerd: Allow, wantSource: SourcePassed, wantReason: "matches goal",
+		},
+		{
+			name:  "rules pass, AI escalate",
+			rules: rulesPass, dec: Decision{Escalate, "goal is vague"},
+			wantVerd: Escalate, wantSource: SourceAI, wantReason: "goal is vague",
+		},
