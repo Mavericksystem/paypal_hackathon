@@ -222,3 +222,23 @@ func TestCombine(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("AI failure reason names the error", func(t *testing.T) {
+		got := Combine(rulesPass, Decision{}, errTimeout)
+		if !strings.Contains(got.Reason, "timeout") {
+			t.Errorf("reason %q should mention the error", got.Reason)
+		}
+	})
+}
+
+.
+func rank(v Verdict) int {
+	switch v {
+	case Allow:
+		return 0
+	case Escalate:
+		return 1
+	default:
+		return 2
+	}
+}
