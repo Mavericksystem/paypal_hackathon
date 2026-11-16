@@ -183,3 +183,24 @@ func TestCombine(t *testing.T) {
 			rules: rulesPass, dec: Decision{Allow, "stale"}, aiErr: errTimeout,
 			wantVerd: Escalate, wantSource: SourceAIFailure,
 		},
+		{
+			name:  "above auto-approve limit, AI allow still escalates",
+			rules: rulesHuman, dec: Decision{Allow, "matches goal"},
+			wantVerd: Escalate, wantSource: SourceThreshold, wantReason: rulesHuman.Reason,
+		},
+		{
+			name:  "above auto-approve limit, AI deny stays deny",
+			rules: rulesHuman, dec: Decision{Deny, "wrong product"},
+			wantVerd: Deny, wantSource: SourceAI, wantReason: "wrong product",
+		},
+		{
+			name:  "above auto-approve limit, AI escalate stays escalate",
+			rules: rulesHuman, dec: Decision{Escalate, "unclear"},
+			wantVerd: Escalate, wantSource: SourceAI, wantReason: "unclear",
+		},
+		{
+			name:  "unknown AI verdict fails closed",
+			rules: rulesPass, dec: Decision{Verdict("approve"), "x"},
+			wantVerd: Escalate, wantSource: SourceAIFailure,
+		},
+	}
