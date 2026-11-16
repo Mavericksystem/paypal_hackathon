@@ -204,3 +204,21 @@ func TestCombine(t *testing.T) {
 			wantVerd: Escalate, wantSource: SourceAIFailure,
 		},
 	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := Combine(tc.rules, tc.dec, tc.aiErr)
+			if got.Verdict != tc.wantVerd {
+				t.Errorf("verdict = %q, want %q", got.Verdict, tc.wantVerd)
+			}
+			if got.Source != tc.wantSource {
+				t.Errorf("source = %q, want %q", got.Source, tc.wantSource)
+			}
+			if tc.wantReason != "" && got.Reason != tc.wantReason {
+				t.Errorf("reason = %q, want %q", got.Reason, tc.wantReason)
+			}
+			if got.Reason == "" {
+				t.Error("reason must never be empty")
+			}
+		})
+	}
