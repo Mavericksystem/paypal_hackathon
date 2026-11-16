@@ -168,3 +168,18 @@ func TestCombine(t *testing.T) {
 			rules: rulesPass, dec: Decision{Escalate, "goal is vague"},
 			wantVerd: Escalate, wantSource: SourceAI, wantReason: "goal is vague",
 		},
+		{
+			name:  "rules pass, AI deny",
+			rules: rulesPass, dec: Decision{Deny, "wrong product"},
+			wantVerd: Deny, wantSource: SourceAI, wantReason: "wrong product",
+		},
+		{
+			name:  "rules pass, AI error fails closed to escalate",
+			rules: rulesPass, aiErr: errTimeout,
+			wantVerd: Escalate, wantSource: SourceAIFailure,
+		},
+		{
+			name:  "AI error wins over a leftover allow decision",
+			rules: rulesPass, dec: Decision{Allow, "stale"}, aiErr: errTimeout,
+			wantVerd: Escalate, wantSource: SourceAIFailure,
+		},
