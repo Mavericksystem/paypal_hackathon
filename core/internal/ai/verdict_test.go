@@ -242,3 +242,36 @@ func rank(v Verdict) int {
 		return 2
 	}
 }
+
+func TestCombineNeverLoosens(t *testing.T) {
+	rulesSet := []policy.Result{rulesPass, rulesHuman, rulesDeny}
+	verdicts := []Verdict{Allow, Escalate, Deny, Verdict("garbage")}
+	errs := []error{nil, errors.New("boom")}
+
+	for _, rules := range rulesSet {
+		for _, v := range verdicts {
+			for _, e := range errs {
+				got := Combine(rules, Decision{v, "r"}, e)
+
+				base := 0 // what the rules alone would decide
+				switch {
+				case rules.Verdict == policy.Deny:
+					base = 2
+				case rules.NeedsHuman:
+					base = 1
+				}
+				if rank(got.Verdict) < base {
+					t.Errorf("rules=%s human=%v ai=%q err=%v: final %q is looser than rules alone",
+						rules.Verdict, rules.NeedsHuman, v, e, got.Verdict)
+				}
+
+				if got.Verdict == Allow {
+					if rules.Verdict != policy.Pass || rules.NeedsHuman || e != nil || v != Allow {
+						t.Errorf("rules=%s human=%v ai=%q err=%v: Allow without full agreement",
+							rules.Verdict, rules.NeedsHuman, v, e)
+					}
+				}
+			}
+		}
+	}
+}
