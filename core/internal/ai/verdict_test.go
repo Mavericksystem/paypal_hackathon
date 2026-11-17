@@ -231,7 +231,6 @@ func TestCombine(t *testing.T) {
 	})
 }
 
-.
 func rank(v Verdict) int {
 	switch v {
 	case Allow:
