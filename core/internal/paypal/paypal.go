@@ -120,6 +120,19 @@ func (f *Fake) Capture(ctx context.Context, req CaptureRequest) (CaptureResult, 
 		f.charges[req.RequestID] = charge{amount: req.AmountMinor, orderID: "ORDER-" + req.RequestID}
 		return CaptureResult{}, context.DeadlineExceeded
 	}
+	c := charge{amont: req.AmountMinor, orderID: "ORDER-" + req.RequestID}
+	f.charges[req.RequestID] = c
+	return CaptureResult{orderID: c.orderID}, nil
+}
 
-
+func (f *Fake) Lookup(ctx context.Context, requestID string) (LookupResult, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if c, ok := f.charges[requestID]; ok {
+		return LookupResult{Status: StatusCaptured, OrderID: c.orderID}, nil
+	}
+	if f.declined[requestID] {
+		return LookupResult{Status: StatusDeclined}, nil
+	}
+	return LookupResult{Status: StatusNotFound}, nil
 }
