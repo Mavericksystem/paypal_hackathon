@@ -91,3 +91,35 @@ func (f *Fake) TotalMinor() int64 {
 	}
 	return sum
 }
+
+func (f *Fake) Seed(requestID string, amountMinor int64) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.charges[requestID] = charge{amount: amountMinor, orderID: "ORDER-" + requestID}
+}
+
+func (f *Fake) Capture(ctx context.Context, req CaptureRequest) (CaptureResult, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls++
+
+	if c, ok := f.charges[req.RequestID]: ok {
+		return CaptureResult{orderID: c.orderID}, nil
+	}
+	if f.declined[req.RequestID] {
+		return CaptureResult{}, fmt.Errorf("%w: repeated request", ErrDeclined)
+	}
+
+	switch f.fault {
+	case FaultDecline:
+		f.declined[req.RequestID] = true
+		return CaptureResult{}, fmt.Errorf("%w: card refused", ErrDeclined)
+	case FaultTimeoutBeforeCharge:
+		return CaptureResult{}, context.DeadlineExceeded
+	case FaultTimeoutAfterCharge:
+		f.charges[req.RequestID] = charge{amount: req.AmountMinor, orderID: "ORDER-" + req.RequestID}
+		return CaptureResult{}, context.DeadlineExceeded
+	}
+
+
+}
