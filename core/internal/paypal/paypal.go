@@ -69,3 +69,25 @@ func (f *Fake) SetFault(fault Fault) {
 	defer f.mu.Unlock()
 	f.fault = fault
 }
+
+func (f *Fake) Calls() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.calls
+}
+
+func (f *Fake) Charges() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.charges)
+}
+
+func (f *Fake) TotalMinor() int64 {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var sum int64
+	for _, c := range f.charges {
+		sum += c.amount
+	}
+	return sum
+}
