@@ -3,6 +3,7 @@ package paypal
 import (
 	"context"
 	"errors"
+	"sync"
 )
 
 var ErrDecalined = errors.New("paypal declined the payment")
@@ -45,3 +46,26 @@ const (
 	FaultTimeoutAfterCharge
 	FaultTimeoutBeforeCharge
 )
+
+type charge struct {
+	amount  int64
+	orderID string
+}
+
+type Fake struct {
+	mu       sync.Mutex
+	fault    Fault
+	calls    int
+	charges  map[string]charge
+	declined map[string]bool
+}
+
+func NewFake() *Fake {
+	return &Fake{charges: map[string]charge{}, declined: map[string]bool{}}
+}
+
+func (f *Fake) SetFault(fault Fault) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.fault = fault
+}
