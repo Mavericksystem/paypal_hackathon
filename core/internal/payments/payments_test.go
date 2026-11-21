@@ -8,6 +8,7 @@ import (
 
 	"github.com/Mavericksystem/warden/core/internal/ledger"
 	"github.com/Mavericksystem/warden/core/internal/paypal"
+	"github.com/Mavericksystem/warden/core/internal/state"
 	"github.com/Mavericksystem/warden/core/internal/testutil"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -53,6 +54,17 @@ func (e env) budget(t *testing.T, limit int64) string {
 	id, err := ledger.CreateBudget(context.Background(), e.pool, "test", "USD", limit, "", nil)
 	if err != nil {
 		t.Fatalf("create budget: %v", err)
+	}
+	return id
+}
+
+func (e env) intentIn(t *testing.T, budgetID string, amount int64, st state.State) string {
+	t.Helper()
+	id := testutil.InsertIntent(t, e.pool, budgetID, amount, "USD")
+	_, err := e.pool.Exec(context.Background(),
+		`UPDATE intents SET state = $2, updated_at = $3 WHERE id = $1::uuid`, id, string(st), e.clock.Now())
+	if err != nil {
+		t.Fatalf("set intent state: %v", err)
 	}
 	return id
 }
