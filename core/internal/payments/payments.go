@@ -414,3 +414,22 @@ func (s *Service) Sweep(ctx context.Context, olderThan time.Duration) (SweepResu
 	if err := rows.Err(); err != nil {
 		return SweepResult{}, fmt.Errorf("iterate unresolved intents: %w", err)
 	}
+
+	var res SweepResult
+	for _, id := range ids {
+		p, err := s.Reconcile(ctx, id)
+		switch {
+		case errors.Is(err, ErrTooEarly):
+			res.Pending++
+		case err != nil:
+			res.Errors = append(res.Errors, fmt.Errorf("intent %s: %w", id, err))
+		case p.State == state.Captured:
+			res.Captured++
+		case p.State == state.Failed:
+			res.Failed++
+		default:
+			res.Pending++
+		}
+	}
+	return res, nil
+}
