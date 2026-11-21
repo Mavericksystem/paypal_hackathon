@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Mavericksystem/warden/core/internal/audit"
 	"github.com/Mavericksystem/warden/core/internal/ledger"
 	"github.com/Mavericksystem/warden/core/internal/paypal"
 	"github.com/Mavericksystem/warden/core/internal/state"
@@ -85,4 +86,24 @@ func (e env) snap(t *testing.T, budgetID string) ledger.Snapshot {
 		t.Fatalf("snapshot: %v", err)
 	}
 	return s
+}
+
+func (e env) wantBudget(t *testing.T, budgetID string, reserved, committed int64) {
+	t.Helper()
+	s := e.snap(t, budgetID)
+	if s.Reserved != reserved || s.Committed != committed {
+		t.Fatalf("budget reserved=%d committed=%d, want reserved=%d committed=%d",
+			s.Reserved, s.Committed, reserved, committed)
+	}
+}
+
+func (e env) wantAuditOK(t *testing.T) {
+	t.Helper()
+	res, err := audit.Verify(context.Background(), e.pool)
+	if err != nil {
+		t.Fatalf("verify audit: %v", err)
+	}
+	if !res.OK {
+		t.Fatalf("audit chain broken at seq %d: %s", res.BrokenAtSeq, res.Reason)
+	}
 }
