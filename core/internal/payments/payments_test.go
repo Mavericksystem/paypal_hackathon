@@ -193,3 +193,26 @@ func TestConcurrentExecuteSameIntentChargesOnce(t *testing.T) {
 	e.wantBudget(t, b, 0, 400)
 	e.wantAuditOK(t)
 }
+
+func TestConcurrentExecutesNeverOverspendBudget(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	b := e.budget(t, 100)
+
+	// Five intents of 30 against a limit of 100: exactly three can fit.
+	ids := make([]string, 5)
+	for i := range ids {
+		ids[i] = e.intentIn(t, b, 30, state.Approved)
+	}
+	var wg sync.WaitGroup
+	for _, id := range ids {
+		wg.Add(1)
+		go func(id string) {
+			defer wg.Done()
+			_, err := e.svc.Execute(ctx, id)
+			if err != nil && !errors.Is(err, ErrReservationRefused) {
+				t.Errorf("execute %s: %v", id, err)
+			}
+		}(id)
+	}
+	wg.Wait()
