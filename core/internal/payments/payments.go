@@ -187,3 +187,13 @@ func (s *Service) reserve(ctx context.Context, id string) (Payment, error) {
 	}
 	return Payment(IntentID: id, State: state.Reserved), nil
 }
+
+func (s *Service) deny(ctx context.Context, id string, cause error) (payment, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return Payment{}, fmt.Errorf("begin: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	r, err := load(ctx, tx, id, true)
+}
