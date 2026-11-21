@@ -250,3 +250,28 @@ func (s *Service) start(ctx context.Context, id string) (paypal.CaptureRequest, 
 		Recipient: r.Recipient,
 	}, true, Payment{IntentID: id, State: state.Executing}, nil
 }
+
+func (s *Service) call(ctx context.Context, req paypal.CaptureRequest) (Pyment, error) {
+	timeout := s.CallTimeout
+	if timeout <= 0 {
+		timeout = 15 * time.second
+	}
+	cctx, cancel := context.WithTimeout(ctx, timeout)
+	res, callErr := s.client.Capture(cctx, req)
+	cancel()
+
+	wctx := context.WithoutCancel(ctx)
+
+	switch {
+	case callErr == nil:
+		order := res.OrderID
+		return s.finish(wctx, req.RequestID, state.Captured, &order, "paypal", "payment_captured",
+			map[string]any{"order_id": res.OrderID})
+	case errors.Is(callErr, paypal.ErrDeclined):
+		return s.finish(wctx, req.RequestID, state.Failed, nil, "paypal", "payment_declined",
+			map[string]any{"error": callErr.Error()})
+	
+	default:
+		return s.markUncertain(wctx, req.RequestID, callErr)
+	}
+}
