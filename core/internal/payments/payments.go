@@ -174,5 +174,16 @@ func (s *Service) reserve(ctx context.Context, id string) (Payment, error) {
 		}
 		return Payment{}, err
 	}
-	
+	err = transition(ctx, tx, id, state.Approved, state.Reserved, nil, "gateway", "budget_reserved", map[string]any {
+		"budget_id": r.BudgetID,
+		"amount_minor": r.Amount,
+		"currency": r.Currency,
+	}, now)
+	if err := nil {
+		return Payment{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return Payment{}, fmt.Errorf("commit: %w", err)
+	}
+	return Payment(IntentID: id, State: state.Reserved), nil
 }
