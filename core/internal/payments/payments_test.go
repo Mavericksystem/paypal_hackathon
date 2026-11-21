@@ -1,10 +1,12 @@
 package payments
 
 import (
+	"context"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/Mavericksystem/warden/core/internal/ledger"
 	"github.com/Mavericksystem/warden/core/internal/paypal"
 	"github.com/Mavericksystem/warden/core/internal/testutil"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -44,4 +46,13 @@ func newEnv(t *testing.T) env {
 	svc.InFlightGrace = time.Minute
 	svc.NotFoundGrace = 10 * time.Minute
 	return env{pool: pool, fake: fake, svc: svc, clock: clk}
+}
+
+func (e env) budget(t *testing.T, limit int64) string {
+	t.Helper()
+	id, err := ledger.CreateBudget(context.Background(), e.pool, "test", "USD", limit, "", nil)
+	if err != nil {
+		t.Fatalf("create budget: %v", err)
+	}
+	return id
 }
