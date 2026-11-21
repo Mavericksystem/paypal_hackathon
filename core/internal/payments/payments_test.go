@@ -144,3 +144,19 @@ unc TestExecuteIsIdempotent(t *testing.T) {
 	}
 	e.wantBudget(t, b, 0, 400)
 }
+
+func TestExecuteRefusesIntentsThatAreNotApproved(t *testing.T) {
+	e := newEnv(t)
+	b := e.budget(t, 1000)
+	for _, st := range []state.State{state.Created, state.PolicyChecked, state.PendingApproval, state.Rejected} {
+		id := e.intentIn(t, b, 100, st)
+		_, err := e.svc.Execute(context.Background(), id)
+		if !errors.Is(err, ErrNotExecutable) {
+			t.Fatalf("%s: err=%v, want ErrNotExecutable", st, err)
+		}
+	}
+	if e.fake.Calls() != 0 {
+		t.Fatalf("paypal was called %d times for non-approved intents", e.fake.Calls())
+	}
+	e.wantBudget(t, b, 0, 0)
+}
