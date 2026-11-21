@@ -391,3 +391,26 @@ type SweepResult struct {
 	Pending  int
 	Errors   []error
 }
+
+func (s *Service) Sweep(ctx context.Context, olderThan time.Duration) (SweepResult, error) {
+	cutoff := s.Now().Add(-olderThan)
+	rows, err := s.pool.Query(ctx,
+		`SELECT id::text FROM intents
+		 WHERE state IN ('executing', 'uncertain') AND updated_at <= $1
+		 ORDER BY updated_at`, cutoff)
+	if err != nil {
+		return SweepResult{}, fmt.Errorf("list unresolved intents: %w", err)
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return SweepResult{}, fmt.Errorf("scan intent id: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return SweepResult{}, fmt.Errorf("iterate unresolved intents: %w", err)
+	}
