@@ -216,3 +216,24 @@ func TestConcurrentExecutesNeverOverspendBudget(t *testing.T) {
 		}(id)
 	}
 	wg.Wait()
+
+	captured, denied := 0, 0
+	for _, id := range ids {
+		switch e.stateOf(t, id) {
+		case state.Captured:
+			captured++
+		case state.Denied:
+			denied++
+		default:
+			t.Errorf("intent %s ended in %s", id, e.stateOf(t, id))
+		}
+	}
+	if captured != 3 || denied != 2 {
+		t.Fatalf("captured=%d denied=%d, want 3 and 2", captured, denied)
+	}
+	if e.fake.TotalMinor() != 90 {
+		t.Fatalf("paypal moved %d, want 90", e.fake.TotalMinor())
+	}
+	e.wantBudget(t, b, 0, 90)
+	e.wantAuditOK(t)
+}
