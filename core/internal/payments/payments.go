@@ -196,4 +196,19 @@ func (s *Service) deny(ctx context.Context, id string, cause error) (payment, er
 	defer tx.Rollback(ctx)
 
 	r, err := load(ctx, tx, id, true)
+	if err != nil {
+		return Payment{}, err
+	}
+	if state.State(r.State) != state.Approved {
+		return r.payment(), nil
+	}
+	err = transition(ctx, tx, id, state.Approved, state.Denied, nil, "gateway", "reservation_refused",
+		map[string]any{"reason": cause.Error()}, s.Now())
+	if err != nil {
+		return Payment{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return Payment{}, fmt.Errorf("commit: %w", err)
+	}
+	return Payment{IntentID: id, State: state.Denied}, fmt.Errorf("%w: %w", ErrReservationRefused, cause)
 }
