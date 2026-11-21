@@ -184,3 +184,12 @@ func TestConcurrentExecuteSameIntentChargesOnce(t *testing.T) {
 	for err := range errs {
 		t.Errorf("execute: %v", err)
 	}
+	if got := e.stateOf(t, id); got != state.Captured {
+		t.Fatalf("state %s, want captured", got)
+	}
+	if e.fake.Calls() != 1 || e.fake.Charges() != 1 {
+		t.Fatalf("paypal calls=%d charges=%d, want 1 and 1", e.fake.Calls(), e.fake.Charges())
+	}
+	e.wantBudget(t, b, 0, 400)
+	e.wantAuditOK(t)
+}
