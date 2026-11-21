@@ -290,3 +290,13 @@ func (s *Service) markUncertain(ctx context.Context, id string, callErr error) (
 	if state.State(r.State) != state.Executing {
 		return r.payment(), nil
 	}
+	err = transition(ctx, tx, id, state.Executing, state.Uncertain, nil, "gateway", "payment_uncertain",
+		map[string]any{"error": callErr.Error()}, s.Now())
+	if err != nil {
+		return Payment{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return Payment{}, fmt.Errorf("commit: %w", err)
+	}
+	return Payment{IntentID: id, State: state.Uncertain}, nil
+}
