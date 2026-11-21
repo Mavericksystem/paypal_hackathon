@@ -357,3 +357,26 @@ func TestSweepResolvesIntentsLeftExecutingByACrash(t *testing.T) {
 	}
 	e.fake.Seed(a, 300)
 	e.wantBudget(t, b, 500, 0)
+
+	res, err := e.svc.Sweep(ctx, 0)
+	if err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	if res.Captured != 0 || res.Failed != 0 || res.Pending != 2 {
+		t.Fatalf("fresh sweep %+v, want everything pending", res)
+	}
+
+	e.clock.Advance(11 * time.Minute)
+	res, err = e.svc.Sweep(ctx, time.Minute)
+	if err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	if len(res.Errors) != 0 || res.Captured != 1 || res.Failed != 1 {
+		t.Fatalf("sweep %+v, want 1 captured and 1 failed", res)
+	}
+	if e.stateOf(t, a) != state.Captured || e.stateOf(t, c) != state.Failed {
+		t.Fatalf("states a=%s c=%s", e.stateOf(t, a), e.stateOf(t, c))
+	}
+	e.wantBudget(t, b, 0, 300)
+	e.wantAuditOK(t)
+}
