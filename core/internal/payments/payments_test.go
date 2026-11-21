@@ -237,3 +237,24 @@ func TestConcurrentExecutesNeverOverspendBudget(t *testing.T) {
 	e.wantBudget(t, b, 0, 90)
 	e.wantAuditOK(t)
 }
+
+func TestDeclinedPaymentReleasesTheReservation(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	b := e.budget(t, 1000)
+	id := e.intentIn(t, b, 400, state.Approved)
+	e.fake.SetFault(paypal.FaultDecline)
+
+	p, err := e.svc.Execute(ctx, id)
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if p.State != state.Failed {
+		t.Fatalf("state %s, want failed", p.State)
+	}
+	e.wantBudget(t, b, 0, 0)
+	if e.fake.Charges() != 0 {
+		t.Fatalf("charges=%d, want 0", e.fake.Charges())
+	}
+	e.wantAuditOK(t)
+}
