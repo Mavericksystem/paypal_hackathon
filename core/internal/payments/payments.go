@@ -318,3 +318,26 @@ func (s *Service) finish(ctx context.Context, id string, to state.State, orderID
 	if cur == to {
 		return r.payment(), nil // already resolved the same way
 	}
+	if cur != state.Executing && cur != state.Uncertain {
+		return r.payment(), fmt.Errorf("%w: wanted %s but intent is %s", intents.ErrStateConflict, to, cur)
+	}
+	if to == state.Captured {
+		err = ledger.Commit(ctx, tx, id)
+	} else {
+		err = ledger.Release(ctx, tx, id)
+	}
+	if err != nil {
+		return Payment{}, err
+	}
+	if err := transition(ctx, tx, id, cur, to, orderID, actor, event, payload, s.Now()); err != nil {
+		return Payment{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return Payment{}, fmt.Errorf("commit: %w", err)
+	}
+	p := Payment{IntentID: id, State: to}
+	if orderID != nil {
+		p.PaypalOrderID = *orderID
+	}
+	return p, nil
+}
