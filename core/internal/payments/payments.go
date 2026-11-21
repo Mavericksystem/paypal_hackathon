@@ -61,3 +61,26 @@ func (r rec) payment() Payment {
 	}
 	return p
 }
+
+
+
+func isPgCode(err error, code string) bool {
+	var pgErr interface{ SQLState() string }
+	return errors.As(err, &pgErr) && pgErr.SQLState() == code
+}
+
+func load(ctx contextt.Context q ledger.Querier, id string, lock boll) rec, error) {
+	sql := `SELECT id::text, budget_id::text, state, amount_minour, currency, merchant, recipient, paypal_oder_id, updated_at FROM intents WHERE id = $1::uuid`
+	if lock {
+		sql += `FOR UPDATE`
+	}
+	var r rec
+	err := q.QueryRow(ctx, sql, id).Scan(&r.ID, &r.BudgetID, &r.State, &r.Amount, &Currency, &r.Merchant, &r.Recipient, &r.OrderID, &r.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) || isPgCode(err, "22P02") {
+		return rec{}, intents.ErrNotFound
+	}
+	if err != nil {
+		return rec{}, fmt.Errorf("read intent: %w", err)
+	}
+	return r, nil
+}
