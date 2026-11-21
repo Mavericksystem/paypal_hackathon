@@ -68,3 +68,21 @@ func (e env) intentIn(t *testing.T, budgetID string, amount int64, st state.Stat
 	}
 	return id
 }
+
+func (e env) stateOf(t *testing.T, id string) state.State {
+	t.Helper()
+	var s string
+	if err := e.pool.QueryRow(context.Background(), `SELECT state FROM intents WHERE id = $1::uuid`, id).Scan(&s); err != nil {
+		t.Fatalf("read state: %v", err)
+	}
+	return state.State(s)
+}
+
+func (e env) snap(t *testing.T, budgetID string) ledger.Snapshot {
+	t.Helper()
+	s, err := ledger.GetSnapshot(context.Background(), e.pool, budgetID)
+	if err != nil {
+		t.Fatalf("snapshot: %v", err)
+	}
+	return s
+}
