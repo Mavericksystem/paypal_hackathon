@@ -384,3 +384,10 @@ func (s *Service) Reconcile(ctx context.Context, intentID string) (Payment, erro
 	}
 	return r.payment(), fmt.Errorf("unknown lookup status %q", lk.Status)
 }
+
+type SweepResult struct {
+	Captured int
+	Failed   int
+	Pending  int
+	Errors   []error
+}
