@@ -324,3 +324,9 @@ func TestTimeoutBeforeChargeIsReconciledAsFailedOnlyAfterGrace(t *testing.T) {
 	if p.State != state.Failed {
 		t.Fatalf("state %s, want failed", p.State)
 	}
+	e.wantBudget(t, b, 0, 0)
+	if e.fake.Charges() != 0 {
+		t.Fatalf("charges=%d, want 0", e.fake.Charges())
+	}
+	e.wantAuditOK(t)
+}
