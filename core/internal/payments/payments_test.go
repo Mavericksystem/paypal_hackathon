@@ -330,3 +330,30 @@ func TestTimeoutBeforeChargeIsReconciledAsFailedOnlyAfterGrace(t *testing.T) {
 	}
 	e.wantAuditOK(t)
 }
+
+func TestSweepResolvesIntentsLeftExecutingByACrash(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	b := e.budget(t, 1000)
+
+	// Intent A: crashed after PayPal took the money.
+	a := e.intentIn(t, b, 300, state.Executing)
+	// Intent B: crashed before PayPal saw anything.
+	c := e.intentIn(t, b, 200, state.Executing)
+	for _, id := range []struct {
+		id  string
+		amt int64
+	}{{a, 300}, {c, 200}} {
+		tx, err := e.pool.Begin(ctx)
+		if err != nil {
+			t.Fatalf("begin: %v", err)
+		}
+		if err := ledger.Reserve(ctx, tx, id.id, b, id.amt, "USD", e.clock.Now()); err != nil {
+			t.Fatalf("reserve: %v", err)
+		}
+		if err := tx.Commit(ctx); err != nil {
+			t.Fatalf("commit: %v", err)
+		}
+	}
+	e.fake.Seed(a, 300)
+	e.wantBudget(t, b, 500, 0)
