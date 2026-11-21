@@ -366,3 +366,21 @@ func (s *Service) Reconcile(ctx context.Context, intentID string) (Payment, erro
 	if err != nil {
 		return r.payment(), fmt.Errorf("lookup at paypal: %w", err)
 	}
+
+	switch lk.Status {
+	case paypal.StatusCaptured:
+		order := lk.OrderID
+		return s.finish(ctx, intentID, state.Captured, &order, "reconciler", "reconciled_captured",
+			map[string]any{"order_id": lk.OrderID, "was": string(st)})
+	case paypal.StatusDeclined:
+		return s.finish(ctx, intentID, state.Failed, nil, "reconciler", "reconciled_declined",
+			map[string]any{"was": string(st)})
+	case paypal.StatusNotFound:
+		if age < s.NotFoundGrace {
+			return r.payment(), ErrTooEarly
+		}
+		return s.finish(ctx, intentID, state.Failed, nil, "reconciler", "reconciled_not_found",
+			map[string]any{"was": string(st), "age_seconds": int64(age.Seconds())})
+	}
+	return r.payment(), fmt.Errorf("unknown lookup status %q", lk.Status)
+}
