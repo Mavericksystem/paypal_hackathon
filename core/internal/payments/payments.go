@@ -355,3 +355,14 @@ func (s *Service) Reconcile(ctx context.Context, intentID string) (Payment, erro
 	if st == state.Executing && age < s.InFlightGrace {
 		return r.payment(), ErrTooEarly
 	}
+
+	timeout := s.CallTimeout
+	if timeout <= 0 {
+		timeout = 15 * time.Second
+	}
+	lctx, cancel := context.WithTimeout(ctx, timeout)
+	lk, err := s.client.Lookup(lctx, intentID)
+	cancel()
+	if err != nil {
+		return r.payment(), fmt.Errorf("lookup at paypal: %w", err)
+	}
