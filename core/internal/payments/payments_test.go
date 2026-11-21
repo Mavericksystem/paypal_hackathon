@@ -284,3 +284,17 @@ func TestTimeoutAfterChargeIsUncertainThenReconciledAsCaptured(t *testing.T) {
 	if e.fake.Calls() != 1 {
 		t.Fatalf("paypal called %d times, want 1", e.fake.Calls())
 	}
+
+	p, err = e.svc.Reconcile(ctx, id)
+	if err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	if p.State != state.Captured || p.PaypalOrderID == "" {
+		t.Fatalf("got %+v, want captured with an order id", p)
+	}
+	e.wantBudget(t, b, 0, 400)
+	if e.fake.Charges() != 1 {
+		t.Fatalf("charges=%d, want 1", e.fake.Charges())
+	}
+	e.wantAuditOK(t)
+}
