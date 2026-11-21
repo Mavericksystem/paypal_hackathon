@@ -160,3 +160,27 @@ func TestExecuteRefusesIntentsThatAreNotApproved(t *testing.T) {
 	}
 	e.wantBudget(t, b, 0, 0)
 }
+
+func TestConcurrentExecuteSameIntentChargesOnce(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	b := e.budget(t, 1000)
+	id := e.intentIn(t, b, 400, state.Approved)
+
+	const n = 20
+	var wg sync.WaitGroup
+	errs := make(chan error, n)
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := e.svc.Execute(ctx, id); err != nil {
+				errs <- err
+			}
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Errorf("execute: %v", err)
+	}
