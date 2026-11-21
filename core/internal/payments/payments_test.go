@@ -298,3 +298,29 @@ func TestTimeoutAfterChargeIsUncertainThenReconciledAsCaptured(t *testing.T) {
 	}
 	e.wantAuditOK(t)
 }
+
+func TestTimeoutBeforeChargeIsReconciledAsFailedOnlyAfterGrace(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	b := e.budget(t, 1000)
+	id := e.intentIn(t, b, 400, state.Approved)
+	e.fake.SetFault(paypal.FaultTimeoutBeforeCharge)
+
+	if p, err := e.svc.Execute(ctx, id); err != nil || p.State != state.Uncertain {
+		t.Fatalf("execute: %+v, %v", p, err)
+	}
+
+	// PayPal has no record, but a late request could still land: do not decide yet.
+	if _, err := e.svc.Reconcile(ctx, id); !errors.Is(err, ErrTooEarly) {
+		t.Fatalf("early reconcile err=%v, want ErrTooEarly", err)
+	}
+	e.wantBudget(t, b, 400, 0)
+
+	e.clock.Advance(11 * time.Minute)
+	p, err := e.svc.Reconcile(ctx, id)
+	if err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	if p.State != state.Failed {
+		t.Fatalf("state %s, want failed", p.State)
+	}
