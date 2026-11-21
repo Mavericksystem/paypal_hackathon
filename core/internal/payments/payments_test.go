@@ -258,3 +258,29 @@ func TestDeclinedPaymentReleasesTheReservation(t *testing.T) {
 	}
 	e.wantAuditOK(t)
 }
+
+func TestTimeoutAfterChargeIsUncertainThenReconciledAsCaptured(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	b := e.budget(t, 1000)
+	id := e.intentIn(t, b, 400, state.Approved)
+	e.fake.SetFault(paypal.FaultTimeoutAfterCharge)
+
+	p, err := e.svc.Execute(ctx, id)
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if p.State != state.Uncertain {
+		t.Fatalf("state %s, want uncertain", p.State)
+	}
+	// The money is held, not released and not committed.
+	e.wantBudget(t, b, 400, 0)
+
+	// Executing again must not touch PayPal.
+	e.fake.SetFault(paypal.FaultNone)
+	if p, err := e.svc.Execute(ctx, id); err != nil || p.State != state.Uncertain {
+		t.Fatalf("re-execute: %+v, %v", p, err)
+	}
+	if e.fake.Calls() != 1 {
+		t.Fatalf("paypal called %d times, want 1", e.fake.Calls())
+	}
