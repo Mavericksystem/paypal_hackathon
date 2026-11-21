@@ -2,6 +2,10 @@ package payments
 
 import (
 	"errors"
+	"time"
+
+	"github.com/Mavericksystem/warden/core/internal/state"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 var (
@@ -10,3 +14,30 @@ var (
 
 	ErrTooEarly = errors.New("too early to reconcile this payment")
 )
+
+type Payment struct {
+	IntentID      string
+	State         state.State
+	PaypalOrderID string
+}
+
+type Service struct {
+	pool   *pgxpool.Pool
+	client paypal.Cliernt
+
+	CallTimeout   time.Duration
+	InFlightGrade time.Duration
+	NotFoundGrace time.Duration
+	Now           func() time.Time
+}
+
+func New(pool *pgxpool.Pool, client paypal.Client) *Service {
+	return &Service{
+		pool:          pool,
+		client:        client,
+		CallTimeout:   15 * time.Second,
+		InFlightGrade: 2 * time.Minute,
+		NotFoundGrace: 15 * time.Minute,
+		Now:           time.Now,
+	}
+}
