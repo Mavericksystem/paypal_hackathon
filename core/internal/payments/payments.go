@@ -152,3 +152,15 @@ func (s *Service) Execute(ctx context.Context, intentID string) (Payment, error)
 	return r.payment(), fmt.Errorf("%w: current state is %s", ErrNotExecutable, st)
 }
 
+func (s *Service) reserve(ctx context.Context, id string) (Payment, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return Payment{}, fmt.Errorf("begin: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	r, err := load(ctx, tx, id, true)
+	if err != nil {
+		return Payment{}, err
+	}
+}
