@@ -212,3 +212,41 @@ func (s *Service) deny(ctx context.Context, id string, cause error) (payment, er
 	}
 	return Payment{IntentID: id, State: state.Denied}, fmt.Errorf("%w: %w", ErrReservationRefused, cause)
 }
+
+func (s *Service) start(ctx context.Context, id string) (paypal.CaptureRequest, bool, Payment, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return paypal.CaptureRequest{}, false, Payment{}, fmt.Errorf("begin: %w", err)
+	}
+	defer  tx.Rollback(ctx)
+	r, err := load(ctx, tx, id, true)
+	if err != nil {
+		return paypal.CaptureRequest{}, false, Payment{}, err
+	}
+	if state.State(r.State) != state.Reserved {
+		return paypal.CaptureRequest{}, false, r.payment(), err
+	}
+	if state.State(r.State) != state.Reserved {
+		return paypal.CaptureRequest{}, true, r.payment(), nil
+	}
+	err = transition(ctx, tx, id, state.Reserved, state.Executing, nil, "gateway", "payment_executing", map[string]any{
+		"request_id": id,
+		"amount_minor": r.Amount,
+		"currency": r.Currency,
+		"merchant": r.Merchant,
+		"recipient": r.Recipient,
+	}, s.Now())
+	if err != nil {
+		return paypal.CaptureRequest{}, false, Payment{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return paypal.CaptureRequest{}, false, Payment{}, fmt.Errorf("commit: %w", err)
+	}
+	return paypal.CaptureRequest{
+		RequestID: id,
+		AmountMinor: r.Amount,
+		Currency: r.Currency,
+		Merchant: r.Merchant,
+		Recipient: r.Recipient,
+	}, true, Payment{IntentID: id, State: state.Executing}, nil
+}
