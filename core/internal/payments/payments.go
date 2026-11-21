@@ -341,3 +341,17 @@ func (s *Service) finish(ctx context.Context, id string, to state.State, orderID
 	}
 	return p, nil
 }
+
+func (s *Service) Reconcile(ctx context.Context, intentID string) (Payment, error) {
+	r, err := load(ctx, s.pool, intentID, false)
+	if err != nil {
+		return Payment{}, err
+	}
+	st := state.State(r.State)
+	if st != state.Executing && st != state.Uncertain {
+		return r.payment(), nil
+	}
+	age := s.Now().Sub(r.UpdatedAt)
+	if st == state.Executing && age < s.InFlightGrace {
+		return r.payment(), ErrTooEarly
+	}
