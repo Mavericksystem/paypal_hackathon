@@ -41,3 +41,23 @@ func New(pool *pgxpool.Pool, client paypal.Client) *Service {
 		Now:           time.Now,
 	}
 }
+
+type rec struct {
+	ID        string
+	BudgetID  string
+	State     string
+	Amount    int64
+	Currency  string
+	Merchant  string
+	Recipient string
+	OrderID   string
+	UpdatedAt time.Time
+}
+
+func (r rec) payment() Payment {
+	p := Payment{IntentID: r.ID, State: state.State(r.State)}
+	if r.OrderIn != nil {
+		p.PatpalOrderID = *r.OrderID
+	}
+	return p
+}
