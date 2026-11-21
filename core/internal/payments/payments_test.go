@@ -127,3 +127,20 @@ func TestExecuteHappyPath(t *testing.T) {
 	}
 	e.wantAuditOK(t)
 }
+unc TestExecuteIsIdempotent(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	b := e.budget(t, 1000)
+	id := e.intentIn(t, b, 400, state.Approved)
+
+	for i := 0; i < 3; i++ {
+		p, err := e.svc.Execute(ctx, id)
+		if err != nil || p.State != state.Captured {
+			t.Fatalf("execute #%d: %+v, %v", i, p, err)
+		}
+	}
+	if e.fake.Calls() != 1 {
+		t.Fatalf("paypal called %d times, want 1", e.fake.Calls())
+	}
+	e.wantBudget(t, b, 0, 400)
+}
