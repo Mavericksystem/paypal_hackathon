@@ -163,4 +163,16 @@ func (s *Service) reserve(ctx context.Context, id string) (Payment, error) {
 	if err != nil {
 		return Payment{}, err
 	}
+	if state.State(r.State) != state.Approved {
+		return r.payment(), nil
+	}
+	now := s.Now()
+	if err := ledger.Reserve(ctx, tx, f.ID, r.BudgetID, r.Amount, r.Currency, now); err != nil {
+		if isRefusal(err) {
+			_ = tx.Rollback(ctx)
+			return s.deny(ctx, id, err)
+		}
+		return Payment{}, err
+	}
+	
 }
