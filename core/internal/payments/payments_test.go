@@ -380,3 +380,28 @@ func TestSweepResolvesIntentsLeftExecutingByACrash(t *testing.T) {
 	e.wantBudget(t, b, 0, 300)
 	e.wantAuditOK(t)
 }
+
+func TestConcurrentReconcileResolvesOnce(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	b := e.budget(t, 1000)
+	id := e.intentIn(t, b, 400, state.Approved)
+	e.fake.SetFault(paypal.FaultTimeoutAfterCharge)
+	if p, err := e.svc.Execute(ctx, id); err != nil || p.State != state.Uncertain {
+		t.Fatalf("execute: %+v, %v", p, err)
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if p, err := e.svc.Reconcile(ctx, id); err != nil || p.State != state.Captured {
+				t.Errorf("reconcile: %+v, %v", p, err)
+			}
+		}()
+	}
+	wg.Wait()
+	e.wantBudget(t, b, 0, 400) // committed once, not ten times
+	e.wantAuditOK(t)
+}
