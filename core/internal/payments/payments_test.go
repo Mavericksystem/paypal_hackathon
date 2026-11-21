@@ -107,3 +107,23 @@ func (e env) wantAuditOK(t *testing.T) {
 		t.Fatalf("audit chain broken at seq %d: %s", res.BrokenAtSeq, res.Reason)
 	}
 }
+
+func TestExecuteHappyPath(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	b := e.budget(t, 1000)
+	id := e.intentIn(t, b, 400, state.Approved)
+
+	p, err := e.svc.Execute(ctx, id)
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if p.State != state.Captured || p.PaypalOrderID == "" {
+		t.Fatalf("got %+v, want captured with an order id", p)
+	}
+	e.wantBudget(t, b, 0, 400)
+	if e.fake.Charges() != 1 || e.fake.TotalMinor() != 400 {
+		t.Fatalf("charges=%d total=%d, want 1 and 400", e.fake.Charges(), e.fake.TotalMinor())
+	}
+	e.wantAuditOK(t)
+}
