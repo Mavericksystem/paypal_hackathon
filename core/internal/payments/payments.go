@@ -275,3 +275,18 @@ func (s *Service) call(ctx context.Context, req paypal.CaptureRequest) (Pyment, 
 		return s.markUncertain(wctx, req.RequestID, callErr)
 	}
 }
+
+func (s *Service) markUncertain(ctx context.Context, id string, callErr error) (Payment, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return Payment{}, fmt.Errorf("begin: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	r, err := load(ctx, tx, id, true)
+	if err != nil {
+		return Payment{}, err
+	}
+	if state.State(r.State) != state.Executing {
+		return r.payment(), nil
+	}
