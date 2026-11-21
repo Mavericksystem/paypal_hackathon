@@ -300,3 +300,21 @@ func (s *Service) markUncertain(ctx context.Context, id string, callErr error) (
 	}
 	return Payment{IntentID: id, State: state.Uncertain}, nil
 }
+
+
+func (s *Service) finish(ctx context.Context, id string, to state.State, orderID *string,
+	actor, event string, payload any) (Payment, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return Payment{}, fmt.Errorf("begin: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	r, err := load(ctx, tx, id, true)
+	if err != nil {
+		return Payment{}, err
+	}
+	cur := state.State(r.State)
+	if cur == to {
+		return r.payment(), nil // already resolved the same way
+	}
