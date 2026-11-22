@@ -2,6 +2,7 @@ package payments
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -127,7 +128,7 @@ func TestExecuteHappyPath(t *testing.T) {
 	}
 	e.wantAuditOK(t)
 }
-unc TestExecuteIsIdempotent(t *testing.T) {
+func TestExecuteIsIdempotent(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()
 	b := e.budget(t, 1000)
