@@ -406,3 +406,228 @@ func TestConcurrentReconcileResolvesOnce(t *testing.T) {
 	e.wantBudget(t, b, 0, 400) // committed once, not ten times
 	e.wantAuditOK(t)
 }
+
+func (e env) countEvents(t *testing.T, id, event string) int {
+	t.Helper()
+	var n int
+	err := e.pool.QueryRow(context.Background(),
+		`SELECT count(*) FROM audit_log WHERE intent_id = $1::uuid AND event = $2`, id, event).Scan(&n)
+	if err != nil {
+		t.Fatalf("count audit events: %v", err)
+	}
+	return n
+}
+
+func TestReconcileRefusesCaptureThatDiffersFromTheIntent(t *testing.T) {
+	cases := []struct {
+		name     string
+		amount   int64
+		currency string
+	}{
+		{"amount", 500, "USD"},
+		{"currency", 400, "EUR"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newEnv(t)
+			ctx := context.Background()
+			b := e.budget(t, 1000)
+			id := e.intentIn(t, b, 400, state.Approved)
+			e.fake.SetFault(paypal.FaultTimeoutBeforeCharge)
+			if p, err := e.svc.Execute(ctx, id); err != nil || p.State != state.Uncertain {
+				t.Fatalf("execute: %+v, %v", p, err)
+			}
+			// PayPal turns out to have captured something other than the intent.
+			e.fake.SeedWith(id, tc.amount, tc.currency)
+
+			for i := 0; i < 3; i++ {
+				p, err := e.svc.Reconcile(ctx, id)
+				if !errors.Is(err, ErrAmountMismatch) {
+					t.Fatalf("reconcile #%d err=%v, want ErrAmountMismatch", i, err)
+				}
+				if p.State != state.Uncertain {
+					t.Fatalf("state %s, want uncertain", p.State)
+				}
+			}
+			e.wantBudget(t, b, 400, 0) // still held, nothing committed
+			if n := e.countEvents(t, id, "reconcile_amount_mismatch"); n != 1 {
+				t.Fatalf("mismatch audit entries = %d, want exactly 1 across repeated reconciles", n)
+			}
+			e.wantAuditOK(t)
+		})
+	}
+}
+
+func TestSweepCountsMismatchesInsteadOfCommitting(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	b := e.budget(t, 1000)
+	id := e.intentIn(t, b, 400, state.Approved)
+	e.fake.SetFault(paypal.FaultTimeoutBeforeCharge)
+	if _, err := e.svc.Execute(ctx, id); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	e.fake.Seed(id, 999)
+
+	res, err := e.svc.Sweep(ctx, 0)
+	if err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	if res.Mismatches != 1 || res.Captured != 0 || len(res.Errors) != 0 {
+		t.Fatalf("sweep %+v, want 1 mismatch and nothing else", res)
+	}
+	e.wantBudget(t, b, 400, 0)
+}
+
+func TestCaptureReportedWithWrongAmountIsNotCommitted(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	b := e.budget(t, 1000)
+	id := e.intentIn(t, b, 400, state.Approved)
+	e.fake.SetFault(paypal.FaultOverCharge)
+
+	p, err := e.svc.Execute(ctx, id)
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if p.State != state.Uncertain {
+		t.Fatalf("state %s, want uncertain", p.State)
+	}
+	e.wantBudget(t, b, 400, 0)
+
+	if _, err := e.svc.Reconcile(ctx, id); !errors.Is(err, ErrAmountMismatch) {
+		t.Fatalf("reconcile err=%v, want ErrAmountMismatch", err)
+	}
+	e.wantBudget(t, b, 400, 0)
+	e.wantAuditOK(t)
+}
+
+func TestLateCaptureAfterNotFoundIsFlaggedOnce(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	b := e.budget(t, 1000)
+	id := e.intentIn(t, b, 400, state.Approved)
+	e.fake.SetFault(paypal.FaultTimeoutBeforeCharge)
+
+	if p, err := e.svc.Execute(ctx, id); err != nil || p.State != state.Uncertain {
+		t.Fatalf("execute: %+v, %v", p, err)
+	}
+	e.clock.Advance(11 * time.Minute)
+	if p, err := e.svc.Reconcile(ctx, id); err != nil || p.State != state.Failed {
+		t.Fatalf("reconcile: %+v, %v", p, err)
+	}
+	e.wantBudget(t, b, 0, 0)
+
+	// The delayed request lands at PayPal after the money was released here.
+	e.fake.Seed(id, 400)
+
+	res, err := e.svc.Sweep(ctx, time.Minute)
+	if err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	if res.Conflicts != 1 || len(res.Errors) != 0 {
+		t.Fatalf("sweep %+v, want exactly 1 conflict", res)
+	}
+	if got := e.stateOf(t, id); got != state.Failed {
+		t.Fatalf("state %s, a terminal state must not be rewritten", got)
+	}
+	if n := e.countEvents(t, id, "payment_conflict"); n != 1 {
+		t.Fatalf("conflict entries = %d, want 1", n)
+	}
+
+	// Already flagged, so later sweeps leave it alone.
+	lookups := e.fake.Lookups()
+	res, err = e.svc.Sweep(ctx, time.Minute)
+	if err != nil || res.Conflicts != 0 {
+		t.Fatalf("second sweep %+v, %v", res, err)
+	}
+	if e.fake.Lookups() != lookups {
+		t.Fatalf("flagged intent was looked up again")
+	}
+	if n := e.countEvents(t, id, "payment_conflict"); n != 1 {
+		t.Fatalf("conflict entries = %d after second sweep, want 1", n)
+	}
+	e.wantAuditOK(t)
+}
+
+func TestDeclinedAndNeverRecheckedIntentsAreNotLookedUp(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	b := e.budget(t, 1000)
+	id := e.intentIn(t, b, 400, state.Approved)
+	e.fake.SetFault(paypal.FaultDecline)
+	if p, err := e.svc.Execute(ctx, id); err != nil || p.State != state.Failed {
+		t.Fatalf("execute: %+v, %v", p, err)
+	}
+	if _, err := e.svc.Sweep(ctx, 0); err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	if p, err := e.svc.Reconcile(ctx, id); err != nil || p.State != state.Failed {
+		t.Fatalf("reconcile: %+v, %v", p, err)
+	}
+	if e.fake.Lookups() != 0 {
+		t.Fatalf("a declined intent was looked up %d times, want 0", e.fake.Lookups())
+	}
+}
+
+func TestRecheckStopsAfterTheWindow(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	b := e.budget(t, 1000)
+	id := e.intentIn(t, b, 400, state.Approved)
+	e.fake.SetFault(paypal.FaultTimeoutBeforeCharge)
+	if _, err := e.svc.Execute(ctx, id); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	e.clock.Advance(11 * time.Minute)
+	if p, err := e.svc.Reconcile(ctx, id); err != nil || p.State != state.Failed {
+		t.Fatalf("reconcile: %+v, %v", p, err)
+	}
+
+	e.clock.Advance(e.svc.RecheckWindow + time.Minute)
+	e.fake.Seed(id, 400)
+	res, err := e.svc.Sweep(ctx, time.Minute)
+	if err != nil || res.Conflicts != 0 {
+		t.Fatalf("sweep %+v, %v: window is over, nothing should be looked up", res, err)
+	}
+}
+
+// finish must refuse to flip a terminal intent and must say so in the audit log.
+func TestFinishRecordsConflictInBothDirections(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	b := e.budget(t, 1000)
+
+	declined := e.intentIn(t, b, 100, state.Approved)
+	e.fake.SetFault(paypal.FaultDecline)
+	if p, err := e.svc.Execute(ctx, declined); err != nil || p.State != state.Failed {
+		t.Fatalf("execute declined: %+v, %v", p, err)
+	}
+	e.fake.SetFault(paypal.FaultNone)
+	captured := e.intentIn(t, b, 200, state.Approved)
+	if p, err := e.svc.Execute(ctx, captured); err != nil || p.State != state.Captured {
+		t.Fatalf("execute captured: %+v, %v", p, err)
+	}
+
+	order := "ORDER-LATE"
+	for i := 0; i < 2; i++ { // repeating must not add entries
+		_, err := e.svc.finish(ctx, declined, state.Captured, &order, "test", "payment_captured", nil)
+		if !errors.Is(err, ErrPaymentConflict) {
+			t.Fatalf("failed then captured: err=%v, want ErrPaymentConflict", err)
+		}
+		_, err = e.svc.finish(ctx, captured, state.Failed, nil, "test", "payment_declined", nil)
+		if !errors.Is(err, ErrPaymentConflict) {
+			t.Fatalf("captured then failed: err=%v, want ErrPaymentConflict", err)
+		}
+	}
+	for _, id := range []string{declined, captured} {
+		if n := e.countEvents(t, id, "payment_conflict"); n != 1 {
+			t.Fatalf("intent %s has %d conflict entries, want 1", id, n)
+		}
+	}
+	if e.stateOf(t, declined) != state.Failed || e.stateOf(t, captured) != state.Captured {
+		t.Fatalf("terminal states were rewritten")
+	}
+	e.wantBudget(t, b, 0, 200)
+	e.wantAuditOK(t)
+}

@@ -17,8 +17,12 @@ type CaptureRequest struct {
 	Recipient   string
 }
 
+// CaptureResult carries what PayPal says it captured. The caller compares it
+// with the intent, so a real client must always fill both fields.
 type CaptureResult struct {
-	OrderID string
+	OrderID     string
+	AmountMinor int64
+	Currency    string
 }
 
 type LookupStatus string
@@ -29,9 +33,13 @@ const (
 	StatusDeclined LookupStatus = "declined"
 )
 
+// LookupResult carries the captured amount and currency when Status is
+// StatusCaptured. They are compared with the intent before any money is committed.
 type LookupResult struct {
-	Status  LookupStatus
-	OrderID string
+	Status      LookupStatus
+	OrderID     string
+	AmountMinor int64
+	Currency    string
 }
 
 type Client interface {
@@ -46,17 +54,22 @@ const (
 	FaultDecline
 	FaultTimeoutAfterCharge
 	FaultTimeoutBeforeCharge
+	// FaultOverCharge captures one minor unit more than requested and reports
+	// success, to test that the amount is verified.
+	FaultOverCharge
 )
 
 type charge struct {
-	amount  int64
-	orderID string
+	amount   int64
+	currency string
+	orderID  string
 }
 
 type Fake struct {
 	mu       sync.Mutex
 	fault    Fault
 	calls    int
+	lookups  int
 	charges  map[string]charge
 	declined map[string]bool
 }
@@ -77,6 +90,13 @@ func (f *Fake) Calls() int {
 	return f.calls
 }
 
+// Lookups is how many times Lookup was invoked.
+func (f *Fake) Lookups() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.lookups
+}
+
 func (f *Fake) Charges() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -93,10 +113,19 @@ func (f *Fake) TotalMinor() int64 {
 	return sum
 }
 
+// Seed records a USD charge that happened without going through Capture.
 func (f *Fake) Seed(requestID string, amountMinor int64) {
+	f.SeedWith(requestID, amountMinor, "USD")
+}
+
+func (f *Fake) SeedWith(requestID string, amountMinor int64, currency string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.charges[requestID] = charge{amount: amountMinor, orderID: "ORDER-" + requestID}
+	f.charges[requestID] = charge{amount: amountMinor, currency: currency, orderID: "ORDER-" + requestID}
+}
+
+func (c charge) result() CaptureResult {
+	return CaptureResult{OrderID: c.orderID, AmountMinor: c.amount, Currency: c.currency}
 }
 
 func (f *Fake) Capture(ctx context.Context, req CaptureRequest) (CaptureResult, error) {
@@ -105,12 +134,13 @@ func (f *Fake) Capture(ctx context.Context, req CaptureRequest) (CaptureResult, 
 	f.calls++
 
 	if c, ok := f.charges[req.RequestID]; ok {
-		return CaptureResult{OrderID: c.orderID}, nil
+		return c.result(), nil
 	}
 	if f.declined[req.RequestID] {
 		return CaptureResult{}, fmt.Errorf("%w: repeated request", ErrDeclined)
 	}
 
+	c := charge{amount: req.AmountMinor, currency: req.Currency, orderID: "ORDER-" + req.RequestID}
 	switch f.fault {
 	case FaultDecline:
 		f.declined[req.RequestID] = true
@@ -118,19 +148,21 @@ func (f *Fake) Capture(ctx context.Context, req CaptureRequest) (CaptureResult, 
 	case FaultTimeoutBeforeCharge:
 		return CaptureResult{}, context.DeadlineExceeded
 	case FaultTimeoutAfterCharge:
-		f.charges[req.RequestID] = charge{amount: req.AmountMinor, orderID: "ORDER-" + req.RequestID}
+		f.charges[req.RequestID] = c
 		return CaptureResult{}, context.DeadlineExceeded
+	case FaultOverCharge:
+		c.amount++
 	}
-	c := charge{amount: req.AmountMinor, orderID: "ORDER-" + req.RequestID}
 	f.charges[req.RequestID] = c
-	return CaptureResult{OrderID: c.orderID}, nil
+	return c.result(), nil
 }
 
 func (f *Fake) Lookup(ctx context.Context, requestID string) (LookupResult, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.lookups++
 	if c, ok := f.charges[requestID]; ok {
-		return LookupResult{Status: StatusCaptured, OrderID: c.orderID}, nil
+		return LookupResult{Status: StatusCaptured, OrderID: c.orderID, AmountMinor: c.amount, Currency: c.currency}, nil
 	}
 	if f.declined[requestID] {
 		return LookupResult{Status: StatusDeclined}, nil

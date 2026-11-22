@@ -21,6 +21,17 @@ var (
 	ErrReservationRefused = errors.New("budget reservation refused")
 
 	ErrTooEarly = errors.New("too early to reconcile this payment")
+
+	// ErrAmountMismatch means PayPal reports a capture whose amount or currency
+	// differs from the intent. Nothing is committed, the intent stays unresolved
+	// and an audit entry is written. A human must look at it.
+	ErrAmountMismatch = errors.New("paypal amount or currency differs from the intent")
+
+	// ErrPaymentConflict means the intent was already resolved the opposite way
+	// to what PayPal now shows, for example failed here but captured at PayPal.
+	// Money and ledger disagree. The state is left alone (failed and captured are
+	// terminal), a payment_conflict audit entry is written, a human must resolve it.
+	ErrPaymentConflict = errors.New("intent state conflicts with what paypal shows")
 )
 
 type Payment struct {
@@ -36,6 +47,9 @@ type Service struct {
 	CallTimeout   time.Duration
 	InFlightGrace time.Duration
 	NotFoundGrace time.Duration
+	// RecheckWindow is how long after being failed by "paypal has no record" an
+	// intent keeps being looked up again, to catch a capture that lands late.
+	RecheckWindow time.Duration
 	Now           func() time.Time
 }
 
@@ -46,6 +60,7 @@ func New(pool *pgxpool.Pool, client paypal.Client) *Service {
 		CallTimeout:   15 * time.Second,
 		InFlightGrace: 2 * time.Minute,
 		NotFoundGrace: 15 * time.Minute,
+		RecheckWindow: 24 * time.Hour,
 		Now:           time.Now,
 	}
 }
@@ -109,6 +124,38 @@ func transition(ctx context.Context, tx pgx.Tx, id string, from, to state.State,
 	}
 	if _, err := audit.Append(ctx, tx, id, actor, event, payload, now); err != nil {
 		return err
+	}
+	return nil
+}
+
+// noteOnce appends an audit entry that does not change state, unless the latest
+// audit entry of the intent is already the same event. Repeated sweeps over the
+// same problem therefore do not flood the chain. It takes the intent row lock
+// first, so the lock order stays intent, budgets, audit.
+func (s *Service) noteOnce(ctx context.Context, id, actor, event string, payload any) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	if _, err := load(ctx, tx, id, true); err != nil {
+		return err
+	}
+	var last string
+	err = tx.QueryRow(ctx,
+		`SELECT event FROM audit_log WHERE intent_id = $1::uuid ORDER BY seq DESC LIMIT 1`, id).Scan(&last)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("read latest audit event: %w", err)
+	}
+	if last == event {
+		return nil
+	}
+	if _, err := audit.Append(ctx, tx, id, actor, event, payload, s.Now()); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit: %w", err)
 	}
 	return nil
 }
@@ -267,6 +314,14 @@ func (s *Service) call(ctx context.Context, req paypal.CaptureRequest) (Payment,
 
 	switch {
 	case callErr == nil:
+		// A success that does not match the intent is not trusted: the money
+		// stays reserved and the intent goes uncertain, so reconciliation and a
+		// human look at it instead of committing the wrong amount.
+		if res.AmountMinor != req.AmountMinor || res.Currency != req.Currency {
+			mismatch := fmt.Errorf("%w: capture reported %d %s, intent is %d %s",
+				ErrAmountMismatch, res.AmountMinor, res.Currency, req.AmountMinor, req.Currency)
+			return s.markUncertain(wctx, req.RequestID, mismatch)
+		}
 		order := res.OrderID
 		return s.finish(wctx, req.RequestID, state.Captured, &order, "paypal", "payment_captured",
 			map[string]any{"order_id": res.OrderID})
@@ -321,6 +376,27 @@ func (s *Service) finish(ctx context.Context, id string, to state.State, orderID
 		return r.payment(), nil // already resolved the same way
 	}
 	if cur != state.Executing && cur != state.Uncertain {
+		if cur == state.Captured || cur == state.Failed {
+			// Resolved the opposite way already. Both states are terminal, so the
+			// intent is left alone and the disagreement is recorded for a human.
+			pay := r.payment()
+			_ = tx.Rollback(ctx)
+			conflict := map[string]any{
+				"intent_state":    string(cur),
+				"paypal_outcome":  string(to),
+				"budget_id":       r.BudgetID,
+				"amount_minor":    r.Amount,
+				"currency":        r.Currency,
+				"attempted_event": event,
+			}
+			if orderID != nil {
+				conflict["order_id"] = *orderID
+			}
+			if err := s.noteOnce(ctx, id, actor, "payment_conflict", conflict); err != nil {
+				return pay, err
+			}
+			return pay, fmt.Errorf("%w: intent is %s but outcome was %s", ErrPaymentConflict, cur, to)
+		}
 		return r.payment(), fmt.Errorf("%w: wanted %s but intent is %s", intents.ErrStateConflict, to, cur)
 	}
 	if to == state.Captured {
@@ -344,12 +420,29 @@ func (s *Service) finish(ctx context.Context, id string, to state.State, orderID
 	return p, nil
 }
 
+func (s *Service) lookup(ctx context.Context, id string) (paypal.LookupResult, error) {
+	timeout := s.CallTimeout
+	if timeout <= 0 {
+		timeout = 15 * time.Second
+	}
+	lctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	lk, err := s.client.Lookup(lctx, id)
+	if err != nil {
+		return paypal.LookupResult{}, fmt.Errorf("lookup at paypal: %w", err)
+	}
+	return lk, nil
+}
+
 func (s *Service) Reconcile(ctx context.Context, intentID string) (Payment, error) {
 	r, err := load(ctx, s.pool, intentID, false)
 	if err != nil {
 		return Payment{}, err
 	}
 	st := state.State(r.State)
+	if st == state.Failed {
+		return s.recheckFailed(ctx, r)
+	}
 	if st != state.Executing && st != state.Uncertain {
 		return r.payment(), nil
 	}
@@ -358,19 +451,28 @@ func (s *Service) Reconcile(ctx context.Context, intentID string) (Payment, erro
 		return r.payment(), ErrTooEarly
 	}
 
-	timeout := s.CallTimeout
-	if timeout <= 0 {
-		timeout = 15 * time.Second
-	}
-	lctx, cancel := context.WithTimeout(ctx, timeout)
-	lk, err := s.client.Lookup(lctx, intentID)
-	cancel()
+	lk, err := s.lookup(ctx, intentID)
 	if err != nil {
-		return r.payment(), fmt.Errorf("lookup at paypal: %w", err)
+		return r.payment(), err
 	}
 
 	switch lk.Status {
 	case paypal.StatusCaptured:
+		if lk.AmountMinor != r.Amount || lk.Currency != r.Currency {
+			note := map[string]any{
+				"was":               string(st),
+				"order_id":          lk.OrderID,
+				"expected_minor":    r.Amount,
+				"expected_currency": r.Currency,
+				"paypal_minor":      lk.AmountMinor,
+				"paypal_currency":   lk.Currency,
+			}
+			if err := s.noteOnce(ctx, intentID, "reconciler", "reconcile_amount_mismatch", note); err != nil {
+				return r.payment(), err
+			}
+			return r.payment(), fmt.Errorf("%w: paypal captured %d %s, intent is %d %s",
+				ErrAmountMismatch, lk.AmountMinor, lk.Currency, r.Amount, r.Currency)
+		}
 		order := lk.OrderID
 		return s.finish(ctx, intentID, state.Captured, &order, "reconciler", "reconciled_captured",
 			map[string]any{"order_id": lk.OrderID, "was": string(st)})
@@ -387,51 +489,128 @@ func (s *Service) Reconcile(ctx context.Context, intentID string) (Payment, erro
 	return r.payment(), fmt.Errorf("unknown lookup status %q", lk.Status)
 }
 
-type SweepResult struct {
-	Captured int
-	Failed   int
-	Pending  int
-	Errors   []error
+// recheckFailed catches the dangerous case: an intent was failed because PayPal
+// had no record, and the request then landed anyway. Only intents failed that way
+// are looked up again, and only inside RecheckWindow. A declined intent is final
+// because PayPal answers a repeated request id with the same decline.
+func (s *Service) recheckFailed(ctx context.Context, r rec) (Payment, error) {
+	if s.Now().Sub(r.UpdatedAt) > s.RecheckWindow {
+		return r.payment(), nil
+	}
+	var byNotFound bool
+	err := s.pool.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM audit_log WHERE intent_id = $1::uuid AND event = 'reconciled_not_found')`,
+		r.ID).Scan(&byNotFound)
+	if err != nil {
+		return r.payment(), fmt.Errorf("read failure reason: %w", err)
+	}
+	if !byNotFound {
+		return r.payment(), nil
+	}
+	lk, err := s.lookup(ctx, r.ID)
+	if err != nil {
+		return r.payment(), err
+	}
+	if lk.Status != paypal.StatusCaptured {
+		return r.payment(), nil
+	}
+	conflict := map[string]any{
+		"intent_state":   string(state.Failed),
+		"paypal_outcome": string(state.Captured),
+		"budget_id":      r.BudgetID,
+		"amount_minor":   r.Amount,
+		"currency":       r.Currency,
+		"order_id":       lk.OrderID,
+		"paypal_minor":   lk.AmountMinor,
+		"paypal_curr":    lk.Currency,
+		"detected_by":    "recheck_failed",
+	}
+	if err := s.noteOnce(ctx, r.ID, "reconciler", "payment_conflict", conflict); err != nil {
+		return r.payment(), err
+	}
+	return r.payment(), fmt.Errorf("%w: intent is failed but paypal captured it", ErrPaymentConflict)
 }
 
-func (s *Service) Sweep(ctx context.Context, olderThan time.Duration) (SweepResult, error) {
-	cutoff := s.Now().Add(-olderThan)
-	rows, err := s.pool.Query(ctx,
-		`SELECT id::text FROM intents
-		 WHERE state IN ('executing', 'uncertain') AND updated_at <= $1
-		 ORDER BY updated_at`, cutoff)
+type SweepResult struct {
+	Captured   int
+	Failed     int
+	Pending    int
+	Conflicts  int // intents whose state disagrees with PayPal, need a human
+	Mismatches int // captures whose amount or currency differ, need a human
+	Errors     []error
+}
+
+func (s *Service) ids(ctx context.Context, sql string, args ...any) ([]string, error) {
+	rows, err := s.pool.Query(ctx, sql, args...)
 	if err != nil {
-		return SweepResult{}, fmt.Errorf("list unresolved intents: %w", err)
+		return nil, fmt.Errorf("list intents: %w", err)
 	}
+	defer rows.Close()
 	var ids []string
 	for rows.Next() {
 		var id string
 		if err := rows.Scan(&id); err != nil {
-			rows.Close()
-			return SweepResult{}, fmt.Errorf("scan intent id: %w", err)
+			return nil, fmt.Errorf("scan intent id: %w", err)
 		}
 		ids = append(ids, id)
 	}
-	rows.Close()
 	if err := rows.Err(); err != nil {
-		return SweepResult{}, fmt.Errorf("iterate unresolved intents: %w", err)
+		return nil, fmt.Errorf("iterate intents: %w", err)
+	}
+	return ids, nil
+}
+
+func (s *Service) Sweep(ctx context.Context, olderThan time.Duration) (SweepResult, error) {
+	now := s.Now()
+	unresolved, err := s.ids(ctx,
+		`SELECT id::text FROM intents
+		 WHERE state IN ('executing', 'uncertain') AND updated_at <= $1
+		 ORDER BY updated_at`, now.Add(-olderThan))
+	if err != nil {
+		return SweepResult{}, err
+	}
+	// Failed by "no record" and not yet flagged: a late capture may still show up.
+	recheck, err := s.ids(ctx,
+		`SELECT i.id::text FROM intents i
+		 WHERE i.state = 'failed' AND i.updated_at > $1
+		   AND EXISTS (SELECT 1 FROM audit_log a WHERE a.intent_id = i.id AND a.event = 'reconciled_not_found')
+		   AND NOT EXISTS (SELECT 1 FROM audit_log a WHERE a.intent_id = i.id AND a.event = 'payment_conflict')
+		 ORDER BY i.updated_at`, now.Add(-s.RecheckWindow))
+	if err != nil {
+		return SweepResult{}, err
 	}
 
 	var res SweepResult
-	for _, id := range ids {
+	for _, id := range append(unresolved, recheck...) {
 		p, err := s.Reconcile(ctx, id)
 		switch {
 		case errors.Is(err, ErrTooEarly):
 			res.Pending++
+		case errors.Is(err, ErrPaymentConflict):
+			res.Conflicts++
+		case errors.Is(err, ErrAmountMismatch):
+			res.Mismatches++
 		case err != nil:
 			res.Errors = append(res.Errors, fmt.Errorf("intent %s: %w", id, err))
 		case p.State == state.Captured:
 			res.Captured++
 		case p.State == state.Failed:
-			res.Failed++
+			// Only a state change counts as a failure resolved by this sweep.
+			if containsID(unresolved, id) {
+				res.Failed++
+			}
 		default:
 			res.Pending++
 		}
 	}
 	return res, nil
+}
+
+func containsID(ids []string, id string) bool {
+	for _, v := range ids {
+		if v == id {
+			return true
+		}
+	}
+	return false
 }
