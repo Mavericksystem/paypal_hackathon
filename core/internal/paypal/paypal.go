@@ -3,10 +3,11 @@ package paypal
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 )
 
-var ErrDecalined = errors.New("paypal declined the payment")
+var ErrDeclined = errors.New("paypal declined the payment")
 
 type CaptureRequest struct {
 	RequestID   string
@@ -103,8 +104,8 @@ func (f *Fake) Capture(ctx context.Context, req CaptureRequest) (CaptureResult, 
 	defer f.mu.Unlock()
 	f.calls++
 
-	if c, ok := f.charges[req.RequestID]: ok {
-		return CaptureResult{orderID: c.orderID}, nil
+	if c, ok := f.charges[req.RequestID]; ok {
+		return CaptureResult{OrderID: c.orderID}, nil
 	}
 	if f.declined[req.RequestID] {
 		return CaptureResult{}, fmt.Errorf("%w: repeated request", ErrDeclined)
@@ -120,9 +121,9 @@ func (f *Fake) Capture(ctx context.Context, req CaptureRequest) (CaptureResult, 
 		f.charges[req.RequestID] = charge{amount: req.AmountMinor, orderID: "ORDER-" + req.RequestID}
 		return CaptureResult{}, context.DeadlineExceeded
 	}
-	c := charge{amont: req.AmountMinor, orderID: "ORDER-" + req.RequestID}
+	c := charge{amount: req.AmountMinor, orderID: "ORDER-" + req.RequestID}
 	f.charges[req.RequestID] = c
-	return CaptureResult{orderID: c.orderID}, nil
+	return CaptureResult{OrderID: c.orderID}, nil
 }
 
 func (f *Fake) Lookup(ctx context.Context, requestID string) (LookupResult, error) {
