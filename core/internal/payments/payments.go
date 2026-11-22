@@ -31,10 +31,10 @@ type Payment struct {
 
 type Service struct {
 	pool   *pgxpool.Pool
-	client paypal.Cliernt
+	client paypal.Client
 
 	CallTimeout   time.Duration
-	InFlightGrade time.Duration
+	InFlightGrace time.Duration
 	NotFoundGrace time.Duration
 	Now           func() time.Time
 }
@@ -44,7 +44,7 @@ func New(pool *pgxpool.Pool, client paypal.Client) *Service {
 		pool:          pool,
 		client:        client,
 		CallTimeout:   15 * time.Second,
-		InFlightGrade: 2 * time.Minute,
+		InFlightGrace: 2 * time.Minute,
 		NotFoundGrace: 15 * time.Minute,
 		Now:           time.Now,
 	}
@@ -58,32 +58,30 @@ type rec struct {
 	Currency  string
 	Merchant  string
 	Recipient string
-	OrderID   string
+	OrderID   *string
 	UpdatedAt time.Time
 }
 
 func (r rec) payment() Payment {
 	p := Payment{IntentID: r.ID, State: state.State(r.State)}
-	if r.OrderIn != nil {
-		p.PatpalOrderID = *r.OrderID
+	if r.OrderID != nil {
+		p.PaypalOrderID = *r.OrderID
 	}
 	return p
 }
-
-
 
 func isPgCode(err error, code string) bool {
 	var pgErr interface{ SQLState() string }
 	return errors.As(err, &pgErr) && pgErr.SQLState() == code
 }
 
-func load(ctx contextt.Context q ledger.Querier, id string, lock boll) rec, error) {
-	sql := `SELECT id::text, budget_id::text, state, amount_minour, currency, merchant, recipient, paypal_oder_id, updated_at FROM intents WHERE id = $1::uuid`
+func load(ctx context.Context, q ledger.Querier, id string, lock bool) (rec, error) {
+	sql := `SELECT id::text, budget_id::text, state, amount_minor, currency, merchant, recipient, paypal_order_id, updated_at FROM intents WHERE id = $1::uuid`
 	if lock {
-		sql += `FOR UPDATE`
+		sql += ` FOR UPDATE`
 	}
 	var r rec
-	err := q.QueryRow(ctx, sql, id).Scan(&r.ID, &r.BudgetID, &r.State, &r.Amount, &Currency, &r.Merchant, &r.Recipient, &r.OrderID, &r.UpdatedAt)
+	err := q.QueryRow(ctx, sql, id).Scan(&r.ID, &r.BudgetID, &r.State, &r.Amount, &r.Currency, &r.Merchant, &r.Recipient, &r.OrderID, &r.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) || isPgCode(err, "22P02") {
 		return rec{}, intents.ErrNotFound
 	}
@@ -93,43 +91,43 @@ func load(ctx contextt.Context q ledger.Querier, id string, lock boll) rec, erro
 	return r, nil
 }
 
-func transition(ctx context.Context, tx pgx.Tx, id stringn, from, to stat.State, orderID *string,
+func transition(ctx context.Context, tx pgx.Tx, id string, from, to state.State, orderID *string,
 	actor, event string, payload any, now time.Time) error {
 	if err := state.Check(from, to); err != nil {
 		return err
 	}
-	tag, err := tx.Exec(ctx, 
-		`UPDATE intense SET state = $3, version = version + 1, update_at = $4,
+	tag, err := tx.Exec(ctx,
+		`UPDATE intents SET state = $3, version = version + 1, updated_at = $4,
 			paypal_order_id = COALESCE($5, paypal_order_id)
 			
 			WHERE id = $1::uuid AND state = $2`, id, string(from), string(to), now, orderID)
-		if err != nil {
-			return fmt.Error("update intent state: %w", err)
-		}
-		if tag.RowAffected() != 1 {
-			return intents.ErrStateConflict
-		}
-		if _, err := audit.Append(ctx, tx, id, actor, event, payload, now); err != nil {
-			return err
-		}
-		return nil
+	if err != nil {
+		return fmt.Errorf("update intent state: %w", err)
+	}
+	if tag.RowsAffected() != 1 {
+		return intents.ErrStateConflict
+	}
+	if _, err := audit.Append(ctx, tx, id, actor, event, payload, now); err != nil {
+		return err
+	}
+	return nil
 }
 
 func isRefusal(err error) bool {
 	return errors.Is(err, ledger.ErrBudgetExceeded) ||
 		errors.Is(err, ledger.ErrBudgetExpired) ||
-		errors.Is(err, ledger.ErrCurrencyMismatch) ||
+		errors.Is(err, ledger.ErrCurrencyMismatch)
 }
 
 func (s *Service) Execute(ctx context.Context, intentID string) (Payment, error) {
-	r. err := load(ctx, s.pool, intentID, false)
+	r, err := load(ctx, s.pool, intentID, false)
 	if err != nil {
 		return Payment{}, err
 	}
 	st := state.State(r.State)
 
 	if st == state.Approved {
-		p, err := s.reverse(ctx, intentID)
+		p, err := s.reserve(ctx, intentID)
 		if err != nil {
 			return p, err
 		}
@@ -139,7 +137,7 @@ func (s *Service) Execute(ctx context.Context, intentID string) (Payment, error)
 		}
 	}
 	if st == state.Reserved {
-		cr, stated, p, err := s.start(ctx, intentID)
+		cr, started, p, err := s.start(ctx, intentID)
 		if err != nil {
 			return p, err
 		}
@@ -175,28 +173,28 @@ func (s *Service) reserve(ctx context.Context, id string) (Payment, error) {
 		return r.payment(), nil
 	}
 	now := s.Now()
-	if err := ledger.Reserve(ctx, tx, f.ID, r.BudgetID, r.Amount, r.Currency, now); err != nil {
+	if err := ledger.Reserve(ctx, tx, id, r.BudgetID, r.Amount, r.Currency, now); err != nil {
 		if isRefusal(err) {
 			_ = tx.Rollback(ctx)
 			return s.deny(ctx, id, err)
 		}
 		return Payment{}, err
 	}
-	err = transition(ctx, tx, id, state.Approved, state.Reserved, nil, "gateway", "budget_reserved", map[string]any {
-		"budget_id": r.BudgetID,
+	err = transition(ctx, tx, id, state.Approved, state.Reserved, nil, "gateway", "budget_reserved", map[string]any{
+		"budget_id":    r.BudgetID,
 		"amount_minor": r.Amount,
-		"currency": r.Currency,
+		"currency":     r.Currency,
 	}, now)
-	if err := nil {
+	if err != nil {
 		return Payment{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return Payment{}, fmt.Errorf("commit: %w", err)
 	}
-	return Payment(IntentID: id, State: state.Reserved), nil
+	return Payment{IntentID: id, State: state.Reserved}, nil
 }
 
-func (s *Service) deny(ctx context.Context, id string, cause error) (payment, error) {
+func (s *Service) deny(ctx context.Context, id string, cause error) (Payment, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return Payment{}, fmt.Errorf("begin: %w", err)
@@ -226,23 +224,20 @@ func (s *Service) start(ctx context.Context, id string) (paypal.CaptureRequest, 
 	if err != nil {
 		return paypal.CaptureRequest{}, false, Payment{}, fmt.Errorf("begin: %w", err)
 	}
-	defer  tx.Rollback(ctx)
+	defer tx.Rollback(ctx)
 	r, err := load(ctx, tx, id, true)
 	if err != nil {
 		return paypal.CaptureRequest{}, false, Payment{}, err
 	}
 	if state.State(r.State) != state.Reserved {
-		return paypal.CaptureRequest{}, false, r.payment(), err
-	}
-	if state.State(r.State) != state.Reserved {
-		return paypal.CaptureRequest{}, true, r.payment(), nil
+		return paypal.CaptureRequest{}, false, r.payment(), nil
 	}
 	err = transition(ctx, tx, id, state.Reserved, state.Executing, nil, "gateway", "payment_executing", map[string]any{
-		"request_id": id,
+		"request_id":   id,
 		"amount_minor": r.Amount,
-		"currency": r.Currency,
-		"merchant": r.Merchant,
-		"recipient": r.Recipient,
+		"currency":     r.Currency,
+		"merchant":     r.Merchant,
+		"recipient":    r.Recipient,
 	}, s.Now())
 	if err != nil {
 		return paypal.CaptureRequest{}, false, Payment{}, err
@@ -251,18 +246,18 @@ func (s *Service) start(ctx context.Context, id string) (paypal.CaptureRequest, 
 		return paypal.CaptureRequest{}, false, Payment{}, fmt.Errorf("commit: %w", err)
 	}
 	return paypal.CaptureRequest{
-		RequestID: id,
+		RequestID:   id,
 		AmountMinor: r.Amount,
-		Currency: r.Currency,
-		Merchant: r.Merchant,
-		Recipient: r.Recipient,
+		Currency:    r.Currency,
+		Merchant:    r.Merchant,
+		Recipient:   r.Recipient,
 	}, true, Payment{IntentID: id, State: state.Executing}, nil
 }
 
-func (s *Service) call(ctx context.Context, req paypal.CaptureRequest) (Pyment, error) {
+func (s *Service) call(ctx context.Context, req paypal.CaptureRequest) (Payment, error) {
 	timeout := s.CallTimeout
 	if timeout <= 0 {
-		timeout = 15 * time.second
+		timeout = 15 * time.Second
 	}
 	cctx, cancel := context.WithTimeout(ctx, timeout)
 	res, callErr := s.client.Capture(cctx, req)
@@ -278,7 +273,7 @@ func (s *Service) call(ctx context.Context, req paypal.CaptureRequest) (Pyment, 
 	case errors.Is(callErr, paypal.ErrDeclined):
 		return s.finish(wctx, req.RequestID, state.Failed, nil, "paypal", "payment_declined",
 			map[string]any{"error": callErr.Error()})
-	
+
 	default:
 		return s.markUncertain(wctx, req.RequestID, callErr)
 	}
@@ -308,7 +303,6 @@ func (s *Service) markUncertain(ctx context.Context, id string, callErr error) (
 	}
 	return Payment{IntentID: id, State: state.Uncertain}, nil
 }
-
 
 func (s *Service) finish(ctx context.Context, id string, to state.State, orderID *string,
 	actor, event string, payload any) (Payment, error) {
