@@ -219,3 +219,19 @@ func TestSecondPutReplacesPolicyAndBumpsVersion(t *testing.T) {
 		t.Fatalf("version after identical put = %d, want 3", v)
 	}
 }
+
+func TestPutUnknownBudgetReturnsBudgetNotFound(t *testing.T) {
+	s, pool := newStore(t)
+	in := validInput(unknownBudget)
+
+	err := s.Put(context.Background(), "alice", in)
+	if !errors.Is(err, ledger.ErrBudgetNotFound) {
+		t.Fatalf("want ledger.ErrBudgetNotFound, got %v", err)
+	}
+	if n := countRows(t, pool, `SELECT count(*) FROM policies`); n != 0 {
+		t.Fatalf("policies rows = %d, want 0", n)
+	}
+	if n := countRows(t, pool, `SELECT count(*) FROM audit_log`); n != 0 {
+		t.Fatalf("audit rows = %d, want 0", n)
+	}
+}
