@@ -141,3 +141,15 @@ func TestForMissingPolicyReturnsErrNoPolicy(t *testing.T) {
 		t.Fatalf("other budget: want ErrNoPolicy, got %v", err)
 	}
 }
+
+func TestForMalformedBudgetIDReturnsErrNoPolicy(t *testing.T) {
+	s, _ := newStore(t)
+	for _, id := range []string{"", "not-a-uuid", "12345", "00000000-0000-4000-8000-00000000000z"} {
+		id := id
+		t.Run(id, func(t *testing.T) {
+			if _, err := s.For(context.Background(), "agent-1", id); !errors.Is(err, policystore.ErrNoPolicy) {
+				t.Fatalf("want ErrNoPolicy, got %v", err)
+			}
+		})
+	}
+}
