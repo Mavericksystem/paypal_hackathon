@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"sync"
 	"testing"
 
 	"github.com/Mavericksystem/warden/core/internal/audit"
@@ -440,8 +441,6 @@ func TestFailedAuditAppendLeavesPolicyUnchanged(t *testing.T) {
 	}
 }
 
-
-
 func TestConcurrentPutsKeepVersionAndChainConsistent(t *testing.T) {
 	s, pool := newStore(t)
 	budget := newBudget(t, pool)
@@ -460,3 +459,19 @@ func TestConcurrentPutsKeepVersionAndChainConsistent(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
+	if v := policyVersion(t, pool, "agent-1", budget); v != writers {
+		t.Fatalf("version = %d, want %d", v, writers)
+	}
+	entries := policySetEntries(t, pool)
+	if len(entries) != writers {
+		t.Fatalf("policy_set entries = %d, want %d", len(entries), writers)
+	}
+	for i, e := range entries {
+		if e.Payload.Version != int64(i+1) {
+			t.Fatalf("entry %d has version %d, want %d", i, e.Payload.Version, i+1)
+		}
+	}
+	if n := verifyChain(t, pool); n != writers {
+		t.Fatalf("chain entries = %d, want %d", n, writers)
+	}
+}
