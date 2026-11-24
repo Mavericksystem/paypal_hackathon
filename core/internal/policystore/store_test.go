@@ -285,3 +285,11 @@ func TestPutValidation(t *testing.T) {
 			}
 		})
 	}
+
+	if n := countRows(t, pool, `SELECT count(*) FROM policies`); n != 0 {
+		t.Fatalf("policies rows = %d, want 0", n)
+	}
+	if n := countRows(t, pool, `SELECT count(*) FROM audit_log`); n != 0 {
+		t.Fatalf("audit rows = %d, want 0", n)
+	}
+}
