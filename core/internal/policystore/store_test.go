@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/Mavericksystem/warden/core/internal/audit"
 	"github.com/Mavericksystem/warden/core/internal/intents"
 	"github.com/Mavericksystem/warden/core/internal/ledger"
 	"github.com/Mavericksystem/warden/core/internal/policystore"
@@ -105,4 +106,16 @@ func policySetEntries(t *testing.T, pool *pgxpool.Pool) []policySetEntry {
 		t.Fatalf("iterate audit: %v", err)
 	}
 	return out
+}
+
+func verifyChain(t *testing.T, pool *pgxpool.Pool) int64 {
+	t.Helper()
+	res, err := audit.Verify(context.Background(), pool)
+	if err != nil {
+		t.Fatalf("verify audit: %v", err)
+	}
+	if !res.OK {
+		t.Fatalf("audit chain broken at seq %d: %s", res.BrokenAtSeq, res.Reason)
+	}
+	return res.Entries
 }
