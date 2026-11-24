@@ -439,3 +439,24 @@ func TestFailedAuditAppendLeavesPolicyUnchanged(t *testing.T) {
 		t.Fatalf("chain entries = %d, want 2", n)
 	}
 }
+
+
+
+func TestConcurrentPutsKeepVersionAndChainConsistent(t *testing.T) {
+	s, pool := newStore(t)
+	budget := newBudget(t, pool)
+
+	const writers = 20
+	var wg sync.WaitGroup
+	for i := 0; i < writers; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			in := validInput(budget)
+			in.MaxPerPaymentMinor = int64(1_000 + i)
+			if err := s.Put(context.Background(), "alice", in); err != nil {
+				t.Errorf("writer %d: %v", i, err)
+			}
+		}(i)
+	}
+	wg.Wait()
