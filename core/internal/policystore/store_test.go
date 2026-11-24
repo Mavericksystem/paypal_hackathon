@@ -274,3 +274,14 @@ func TestPutValidation(t *testing.T) {
 		{"empty merchant name", "alice", func(in *policystore.Input) { in.AllowedMerchants = []string{"acme", ""} }},
 		{"blank merchant name", "alice", func(in *policystore.Input) { in.AllowedMerchants = []string{"  "} }},
 	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			in := validInput(budget)
+			tc.mutate(&in)
+			err := s.Put(context.Background(), tc.changedBy, in)
+			if !errors.Is(err, policystore.ErrInvalid) {
+				t.Fatalf("want ErrInvalid, got %v", err)
+			}
+		})
+	}
