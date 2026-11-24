@@ -2,6 +2,7 @@ package policystore_test
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/Mavericksystem/warden/core/internal/intents"
@@ -57,10 +58,51 @@ func countRows(t *testing.T, pool *pgxpool.Pool, query string, args ...any) int6
 	return n
 }
 
-// policyVersion returns the stored version, or 0 when there is no row.
 func policyVersion(t *testing.T, pool *pgxpool.Pool, agentID, budgetID string) int64 {
 	t.Helper()
 	return countRows(t, pool,
 		`SELECT COALESCE(MAX(version), 0) FROM policies WHERE agent_id = $1 AND budget_id = $2::uuid`,
 		agentID, budgetID)
+}
+
+type policySetPayload struct {
+	AgentID             string   `json:"agent_id"`
+	BudgetID            string   `json:"budget_id"`
+	AllowedMerchants    []string `json:"allowed_merchants"`
+	Currency            string   `json:"currency"`
+	MaxPerPaymentMinor  int64    `json:"max_per_payment_minor"`
+	AutoApproveMaxMinor int64    `json:"auto_approve_max_minor"`
+	Version             int64    `json:"version"`
+}
+
+type policySetEntry struct {
+	Actor   string
+	Payload policySetPayload
+}
+
+func policySetEntries(t *testing.T, pool *pgxpool.Pool) []policySetEntry {
+	t.Helper()
+	rows, err := pool.Query(context.Background(),
+		`SELECT actor, payload FROM audit_log WHERE event = 'policy_set' ORDER BY seq`)
+	if err != nil {
+		t.Fatalf("query audit: %v", err)
+	}
+	defer rows.Close()
+	var out []policySetEntry
+	for rows.Next() {
+		var actor string
+		var raw []byte
+		if err := rows.Scan(&actor, &raw); err != nil {
+			t.Fatalf("scan audit entry: %v", err)
+		}
+		var p policySetPayload
+		if err := json.Unmarshal(raw, &p); err != nil {
+			t.Fatalf("decode audit payload %s: %v", raw, err)
+		}
+		out = append(out, policySetEntry{Actor: actor, Payload: p})
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate audit: %v", err)
+	}
+	return out
 }
