@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/Mavericksystem/warden/core/internal/audit"
 	"github.com/Mavericksystem/warden/core/internal/intents"
 	"github.com/Mavericksystem/warden/core/internal/ledger"
+	"github.com/Mavericksystem/warden/core/internal/policy"
 	"github.com/Mavericksystem/warden/core/internal/policystore"
 	"github.com/Mavericksystem/warden/core/internal/testutil"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -151,5 +153,29 @@ func TestForMalformedBudgetIDReturnsErrNoPolicy(t *testing.T) {
 				t.Fatalf("want ErrNoPolicy, got %v", err)
 			}
 		})
+	}
+}
+
+func TestPutThenForRoundTrip(t *testing.T) {
+	s, pool := newStore(t)
+	budget := newBudget(t, pool)
+	in := validInput(budget)
+	mustPut(t, s, "alice", in)
+
+	got, err := s.For(context.Background(), in.AgentID, budget)
+	if err != nil {
+		t.Fatalf("for: %v", err)
+	}
+	want := policy.Policy{
+		AllowedMerchants: []string{"acme", "globex"},
+		Currency:         "USD",
+		MaxPerPayment:    100_000,
+		AutoApproveMax:   5_000,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("policy = %+v, want %+v", got, want)
+	}
+	if v := policyVersion(t, pool, in.AgentID, budget); v != 1 {
+		t.Fatalf("version = %d, want 1", v)
 	}
 }
