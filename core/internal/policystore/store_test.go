@@ -370,7 +370,7 @@ func TestEachPutWritesOneAuditEntryAndChainVerifies(t *testing.T) {
 	}
 }
 
-y_set row from blocking the ALTER, and still checks every new insert.
+
 func TestFailedAuditAppendLeavesPolicyUnchanged(t *testing.T) {
 	s, pool := newStore(t)
 	ctx := context.Background()
@@ -394,4 +394,21 @@ func TestFailedAuditAppendLeavesPolicyUnchanged(t *testing.T) {
 		if !errors.As(err, &pgErr) || pgErr.Code != "23514" {
 			t.Fatalf("want check violation 23514 from the audit insert, got %v", err)
 		}
+	}
+
+	// Replace of an existing policy.
+	changed := validInput(budget)
+	changed.AllowedMerchants = []string{"initech"}
+	changed.MaxPerPaymentMinor = 1
+	wantCheckViolation(t, s.Put(ctx, "alice", changed))
+
+	got, err := s.For(ctx, original.AgentID, budget)
+	if err != nil {
+		t.Fatalf("for after failed replace: %v", err)
+	}
+	if !reflect.DeepEqual(got, wantPolicy) {
+		t.Fatalf("policy changed despite failed audit: %+v, want %+v", got, wantPolicy)
+	}
+	if v := policyVersion(t, pool, original.AgentID, budget); v != 1 {
+		t.Fatalf("version = %d after failed replace, want 1", v)
 	}
