@@ -3,6 +3,7 @@ package policystore_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/Mavericksystem/warden/core/internal/audit"
@@ -118,4 +119,25 @@ func verifyChain(t *testing.T, pool *pgxpool.Pool) int64 {
 		t.Fatalf("audit chain broken at seq %d: %s", res.BrokenAtSeq, res.Reason)
 	}
 	return res.Entries
+}
+
+func TestForMissingPolicyReturnsErrNoPolicy(t *testing.T) {
+	s, pool := newStore(t)
+	ctx := context.Background()
+	budget := newBudget(t, pool)
+	otherBudget := newBudget(t, pool)
+
+	if _, err := s.For(ctx, "agent-1", budget); !errors.Is(err, policystore.ErrNoPolicy) {
+		t.Fatalf("empty table: want ErrNoPolicy, got %v", err)
+	}
+
+	mustPut(t, s, "alice", validInput(budget))
+
+	// A policy belongs to one agent on one budget. It must not leak to another agent or budget.
+	if _, err := s.For(ctx, "agent-2", budget); !errors.Is(err, policystore.ErrNoPolicy) {
+		t.Fatalf("other agent: want ErrNoPolicy, got %v", err)
+	}
+	if _, err := s.For(ctx, "agent-1", otherBudget); !errors.Is(err, policystore.ErrNoPolicy) {
+		t.Fatalf("other budget: want ErrNoPolicy, got %v", err)
+	}
 }
