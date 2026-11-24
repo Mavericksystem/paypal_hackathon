@@ -179,3 +179,43 @@ func TestPutThenForRoundTrip(t *testing.T) {
 		t.Fatalf("version = %d, want 1", v)
 	}
 }
+
+func TestSecondPutReplacesPolicyAndBumpsVersion(t *testing.T) {
+	s, pool := newStore(t)
+	ctx := context.Background()
+	budget := newBudget(t, pool)
+
+	first := validInput(budget)
+	mustPut(t, s, "alice", first)
+
+	second := validInput(budget)
+	second.AllowedMerchants = []string{"initech"}
+	second.MaxPerPaymentMinor = 20_000
+	second.AutoApproveMaxMinor = 1_000
+	mustPut(t, s, "bob", second)
+
+	got, err := s.For(ctx, first.AgentID, budget)
+	if err != nil {
+		t.Fatalf("for: %v", err)
+	}
+	want := policy.Policy{
+		AllowedMerchants: []string{"initech"},
+		Currency:         "USD",
+		MaxPerPayment:    20_000,
+		AutoApproveMax:   1_000,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("policy after replace = %+v, want %+v", got, want)
+	}
+	if v := policyVersion(t, pool, first.AgentID, budget); v != 2 {
+		t.Fatalf("version = %d, want 2", v)
+	}
+	if n := countRows(t, pool, `SELECT count(*) FROM policies`); n != 1 {
+		t.Fatalf("policies rows = %d, want 1 (replace, not insert)", n)
+	}
+
+	mustPut(t, s, "bob", second)
+	if v := policyVersion(t, pool, first.AgentID, budget); v != 3 {
+		t.Fatalf("version after identical put = %d, want 3", v)
+	}
+}
