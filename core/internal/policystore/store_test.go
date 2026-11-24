@@ -40,3 +40,27 @@ func validInput(budgetID string) policystore.Input {
 		AutoApproveMaxMinor: 5_000,
 	}
 }
+
+func mustPut(t *testing.T, s *policystore.Store, changedBy string, in policystore.Input) {
+	t.Helper()
+	if err := s.Put(context.Background(), changedBy, in); err != nil {
+		t.Fatalf("put: %v", err)
+	}
+}
+
+func countRows(t *testing.T, pool *pgxpool.Pool, query string, args ...any) int64 {
+	t.Helper()
+	var n int64
+	if err := pool.QueryRow(context.Background(), query, args...).Scan(&n); err != nil {
+		t.Fatalf("count (%s): %v", query, err)
+	}
+	return n
+}
+
+// policyVersion returns the stored version, or 0 when there is no row.
+func policyVersion(t *testing.T, pool *pgxpool.Pool, agentID, budgetID string) int64 {
+	t.Helper()
+	return countRows(t, pool,
+		`SELECT COALESCE(MAX(version), 0) FROM policies WHERE agent_id = $1 AND budget_id = $2::uuid`,
+		agentID, budgetID)
+}
