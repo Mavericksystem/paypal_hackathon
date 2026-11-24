@@ -13,6 +13,7 @@ import (
 	"github.com/Mavericksystem/warden/core/internal/ledger"
 	"github.com/Mavericksystem/warden/core/internal/policy"
 	"github.com/Mavericksystem/warden/core/internal/policystore"
+	"github.com/Mavericksystem/warden/core/internal/state"
 	"github.com/Mavericksystem/warden/core/internal/testutil"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -476,7 +477,6 @@ func TestConcurrentPutsKeepVersionAndChainConsistent(t *testing.T) {
 	}
 }
 
-
 func TestMissingPolicyLeavesIntentCreatedAndRetrySucceeds(t *testing.T) {
 	s, pool := newStore(t)
 	ctx := context.Background()
@@ -496,3 +496,32 @@ func TestMissingPolicyLeavesIntentCreatedAndRetrySucceeds(t *testing.T) {
 	if _, err := svc.Create(ctx, req); !errors.Is(err, policystore.ErrNoPolicy) {
 		t.Fatalf("create without policy: want ErrNoPolicy, got %v", err)
 	}
+	var st string
+	err := pool.QueryRow(ctx,
+		`SELECT state FROM intents WHERE agent_id = $1 AND idempotency_key = $2`,
+		req.AgentID, req.IdempotencyKey).Scan(&st)
+	if err != nil {
+		t.Fatalf("read intent: %v", err)
+	}
+	if st != string(state.Created) {
+		t.Fatalf("state = %s, want %s", st, state.Created)
+	}
+
+	mustPut(t, s, "alice", policystore.Input{
+		AgentID:             "agent-1",
+		BudgetID:            budget,
+		AllowedMerchants:    []string{"acme"},
+		Currency:            "USD",
+		MaxPerPaymentMinor:  100_000,
+		AutoApproveMaxMinor: 5_000,
+	})
+
+	got, err := svc.Create(ctx, req)
+	if err != nil {
+		t.Fatalf("retry after policy exists: %v", err)
+	}
+	if got.State == state.Created {
+		t.Fatalf("intent is still %s after a policy exists", got.State)
+	}
+	verifyChain(t, pool)
+}
