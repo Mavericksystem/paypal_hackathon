@@ -235,3 +235,16 @@ func TestPutUnknownBudgetReturnsBudgetNotFound(t *testing.T) {
 		t.Fatalf("audit rows = %d, want 0", n)
 	}
 }
+
+func TestPutMalformedBudgetIDIsInvalid(t *testing.T) {
+	s, pool := newStore(t)
+	in := validInput("not-a-uuid")
+
+	err := s.Put(context.Background(), "alice", in)
+	if !errors.Is(err, policystore.ErrInvalid) {
+		t.Fatalf("want ErrInvalid, got %v", err)
+	}
+	if n := countRows(t, pool, `SELECT count(*) FROM audit_log`); n != 0 {
+		t.Fatalf("audit rows = %d, want 0", n)
+	}
+}
