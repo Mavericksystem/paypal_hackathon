@@ -344,3 +344,28 @@ func TestEachPutWritesOneAuditEntryAndChainVerifies(t *testing.T) {
 	if n := countRows(t, pool, `SELECT count(*) FROM audit_log WHERE event = 'policy_set' AND intent_id IS NULL`); n != 3 {
 		t.Fatalf("policy_set entries without intent_id = %d, want 3", n)
 	}
+
+	wantActors := []string{"admin:alice", "admin:bob", "admin:alice"}
+	wantVersions := []int64{1, 2, 1}
+	for i, e := range entries {
+		if e.Actor != wantActors[i] {
+			t.Errorf("entry %d actor = %q, want %q", i, e.Actor, wantActors[i])
+		}
+		if e.Payload.Version != wantVersions[i] {
+			t.Errorf("entry %d version = %d, want %d", i, e.Payload.Version, wantVersions[i])
+		}
+		if e.Payload.BudgetID != budget || e.Payload.Currency != "USD" {
+			t.Errorf("entry %d payload = %+v", i, e.Payload)
+		}
+	}
+	// The second entry carries the full new policy, not a diff.
+	if got := entries[1].Payload; got.MaxPerPaymentMinor != 70_000 ||
+		got.AutoApproveMaxMinor != 5_000 ||
+		!reflect.DeepEqual(got.AllowedMerchants, []string{"acme", "globex"}) {
+		t.Errorf("entry 1 payload = %+v", got)
+	}
+
+	if n := verifyChain(t, pool); n != 3 {
+		t.Fatalf("chain entries = %d, want 3", n)
+	}
+}
