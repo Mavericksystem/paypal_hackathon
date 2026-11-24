@@ -321,3 +321,26 @@ func TestPutAcceptsZeroLimitsAndEmptyMerchantList(t *testing.T) {
 		t.Fatalf("empty merchant list must deny every merchant, got %+v", res)
 	}
 }
+
+func TestEachPutWritesOneAuditEntryAndChainVerifies(t *testing.T) {
+	s, pool := newStore(t)
+	budget := newBudget(t, pool)
+
+	a1 := validInput(budget)
+	mustPut(t, s, "alice", a1)
+
+	a1v2 := validInput(budget)
+	a1v2.MaxPerPaymentMinor = 70_000
+	mustPut(t, s, "bob", a1v2)
+
+	a2 := validInput(budget)
+	a2.AgentID = "agent-2"
+	mustPut(t, s, "alice", a2)
+
+	entries := policySetEntries(t, pool)
+	if len(entries) != 3 {
+		t.Fatalf("policy_set entries = %d, want 3", len(entries))
+	}
+	if n := countRows(t, pool, `SELECT count(*) FROM audit_log WHERE event = 'policy_set' AND intent_id IS NULL`); n != 3 {
+		t.Fatalf("policy_set entries without intent_id = %d, want 3", n)
+	}
