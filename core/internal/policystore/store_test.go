@@ -369,3 +369,29 @@ func TestEachPutWritesOneAuditEntryAndChainVerifies(t *testing.T) {
 		t.Fatalf("chain entries = %d, want 3", n)
 	}
 }
+
+y_set row from blocking the ALTER, and still checks every new insert.
+func TestFailedAuditAppendLeavesPolicyUnchanged(t *testing.T) {
+	s, pool := newStore(t)
+	ctx := context.Background()
+	budget := newBudget(t, pool)
+
+	original := validInput(budget)
+	mustPut(t, s, "alice", original)
+	wantPolicy, err := s.For(ctx, original.AgentID, budget)
+	if err != nil {
+		t.Fatalf("for: %v", err)
+	}
+
+	if _, err := pool.Exec(ctx,
+		`ALTER TABLE audit_log ADD CONSTRAINT block_policy_set CHECK (event <> 'policy_set') NOT VALID`); err != nil {
+		t.Fatalf("install audit failure: %v", err)
+	}
+
+	wantCheckViolation := func(t *testing.T, err error) {
+		t.Helper()
+		var pgErr *pgconn.PgError
+		if !errors.As(err, &pgErr) || pgErr.Code != "23514" {
+			t.Fatalf("want check violation 23514 from the audit insert, got %v", err)
+		}
+	}
