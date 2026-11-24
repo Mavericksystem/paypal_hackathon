@@ -475,3 +475,24 @@ func TestConcurrentPutsKeepVersionAndChainConsistent(t *testing.T) {
 		t.Fatalf("chain entries = %d, want %d", n, writers)
 	}
 }
+
+
+func TestMissingPolicyLeavesIntentCreatedAndRetrySucceeds(t *testing.T) {
+	s, pool := newStore(t)
+	ctx := context.Background()
+	budget := newBudget(t, pool)
+	svc := intents.New(pool, s, nil)
+	req := intents.CreateInput{
+		AgentID:        "agent-1",
+		BudgetID:       budget,
+		IdempotencyKey: "k1",
+		AmountMinor:    1_000,
+		Currency:       "USD",
+		Merchant:       "acme",
+		Recipient:      "acme-payments",
+		Goal:           "buy API credits",
+	}
+
+	if _, err := svc.Create(ctx, req); !errors.Is(err, policystore.ErrNoPolicy) {
+		t.Fatalf("create without policy: want ErrNoPolicy, got %v", err)
+	}
