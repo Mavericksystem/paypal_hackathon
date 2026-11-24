@@ -248,3 +248,29 @@ func TestPutMalformedBudgetIDIsInvalid(t *testing.T) {
 		t.Fatalf("audit rows = %d, want 0", n)
 	}
 }
+
+func TestPutValidation(t *testing.T) {
+	s, pool := newStore(t)
+	budget := newBudget(t, pool)
+
+	cases := []struct {
+		name      string
+		changedBy string
+		mutate    func(*policystore.Input)
+	}{
+		{"missing changed_by", "", func(*policystore.Input) {}},
+		{"blank changed_by", "  ", func(*policystore.Input) {}},
+		{"missing agent", "alice", func(in *policystore.Input) { in.AgentID = "" }},
+		{"blank agent", "alice", func(in *policystore.Input) { in.AgentID = "  " }},
+		{"missing budget", "alice", func(in *policystore.Input) { in.BudgetID = "" }},
+		{"lower case currency", "alice", func(in *policystore.Input) { in.Currency = "usd" }},
+		{"two letter currency", "alice", func(in *policystore.Input) { in.Currency = "US" }},
+		{"four letter currency", "alice", func(in *policystore.Input) { in.Currency = "USDX" }},
+		{"empty currency", "alice", func(in *policystore.Input) { in.Currency = "" }},
+		{"symbol in currency", "alice", func(in *policystore.Input) { in.Currency = "U$D" }},
+		{"digit currency", "alice", func(in *policystore.Input) { in.Currency = "123" }},
+		{"negative per payment max", "alice", func(in *policystore.Input) { in.MaxPerPaymentMinor = -1 }},
+		{"negative auto approve max", "alice", func(in *policystore.Input) { in.AutoApproveMaxMinor = -1 }},
+		{"empty merchant name", "alice", func(in *policystore.Input) { in.AllowedMerchants = []string{"acme", ""} }},
+		{"blank merchant name", "alice", func(in *policystore.Input) { in.AllowedMerchants = []string{"  "} }},
+	}
