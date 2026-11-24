@@ -293,3 +293,31 @@ func TestPutValidation(t *testing.T) {
 		t.Fatalf("audit rows = %d, want 0", n)
 	}
 }
+
+func TestPutAcceptsZeroLimitsAndEmptyMerchantList(t *testing.T) {
+	s, pool := newStore(t)
+	budget := newBudget(t, pool)
+	in := validInput(budget)
+	in.AllowedMerchants = nil
+	in.MaxPerPaymentMinor = 0
+	in.AutoApproveMaxMinor = 0
+	mustPut(t, s, "alice", in)
+
+	got, err := s.For(context.Background(), in.AgentID, budget)
+	if err != nil {
+		t.Fatalf("for: %v", err)
+	}
+	if len(got.AllowedMerchants) != 0 || got.MaxPerPayment != 0 || got.AutoApproveMax != 0 {
+		t.Fatalf("policy = %+v, want empty merchants and zero limits", got)
+	}
+
+	res := policy.Evaluate(got, policy.Request{
+		Merchant:        "acme",
+		Amount:          100,
+		Currency:        "USD",
+		BudgetRemaining: 1_000,
+	})
+	if res.Verdict != policy.Deny || res.Code != "merchant_not_allowed" {
+		t.Fatalf("empty merchant list must deny every merchant, got %+v", res)
+	}
+}
