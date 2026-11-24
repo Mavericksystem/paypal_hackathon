@@ -13,6 +13,7 @@ import (
 	"github.com/Mavericksystem/warden/core/internal/policy"
 	"github.com/Mavericksystem/warden/core/internal/policystore"
 	"github.com/Mavericksystem/warden/core/internal/testutil"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -370,7 +371,6 @@ func TestEachPutWritesOneAuditEntryAndChainVerifies(t *testing.T) {
 	}
 }
 
-
 func TestFailedAuditAppendLeavesPolicyUnchanged(t *testing.T) {
 	s, pool := newStore(t)
 	ctx := context.Background()
@@ -412,3 +412,30 @@ func TestFailedAuditAppendLeavesPolicyUnchanged(t *testing.T) {
 	if v := policyVersion(t, pool, original.AgentID, budget); v != 1 {
 		t.Fatalf("version = %d after failed replace, want 1", v)
 	}
+
+	// Creation of a new policy.
+	fresh := validInput(budget)
+	fresh.AgentID = "agent-2"
+	wantCheckViolation(t, s.Put(ctx, "alice", fresh))
+	if _, err := s.For(ctx, "agent-2", budget); !errors.Is(err, policystore.ErrNoPolicy) {
+		t.Fatalf("failed create left a policy behind: %v", err)
+	}
+	if n := countRows(t, pool, `SELECT count(*) FROM policies`); n != 1 {
+		t.Fatalf("policies rows = %d, want 1", n)
+	}
+	if n := countRows(t, pool, `SELECT count(*) FROM audit_log WHERE event = 'policy_set'`); n != 1 {
+		t.Fatalf("policy_set entries = %d, want 1", n)
+	}
+
+	// Remove the fault. The next change must be version 2: the failed attempts used no version.
+	if _, err := pool.Exec(ctx, `ALTER TABLE audit_log DROP CONSTRAINT block_policy_set`); err != nil {
+		t.Fatalf("remove audit failure: %v", err)
+	}
+	mustPut(t, s, "alice", changed)
+	if v := policyVersion(t, pool, original.AgentID, budget); v != 2 {
+		t.Fatalf("version = %d after recovery, want 2", v)
+	}
+	if n := verifyChain(t, pool); n != 2 {
+		t.Fatalf("chain entries = %d, want 2", n)
+	}
+}
