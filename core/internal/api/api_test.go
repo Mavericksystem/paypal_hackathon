@@ -153,3 +153,18 @@ func TestCreateIntentPassesFieldsAndReturnsIntent(t *testing.T) {
 		t.Fatalf("Content-Type = %q", ct)
 	}
 }
+
+func TestServiceErrorsMapToStatuses(t *testing.T) {
+	cases := []struct {
+		name   string
+		err    error
+		status int
+		code   string
+	}{
+		{"invalid input", fmt.Errorf("%w: amount must be greater than zero", intents.ErrInvalidInput), 400, "invalid_request"},
+		{"budget not found", ledger.ErrBudgetNotFound, 404, "budget_not_found"},
+		{"idempotency conflict", intents.ErrIdempotencyConflict, 409, "idempotency_conflict"},
+		{"state conflict", intents.ErrStateConflict, 409, "state_conflict"},
+		{"no policy", fmt.Errorf("load policy: %w", policystore.ErrNoPolicy), 403, "no_policy"},
+		{"unexpected", errors.New("dial tcp: password=hunter2 refused"), 500, "internal_error"},
+	}
