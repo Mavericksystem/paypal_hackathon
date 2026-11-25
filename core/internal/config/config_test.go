@@ -28,4 +28,12 @@ func TestLoadRequiresDatabaseURLWithScheme(t *testing.T) {
 	}
 }
 
-func
+func TestLoadRejectsBadListenAddr(t *testing.T) {
+	for _, v := range []string{"8080", "localhost", "a:b:c"} {
+		_, err := config.Load(env(map[string]string{"DATABASE_URL": "postgres://x", "LISTEN_ADDR": v}))
+
+		if err == nil {
+			t.Fatalf("LISTEN_ADDR %q: WANT an error", v)
+		}
+	}
+}
