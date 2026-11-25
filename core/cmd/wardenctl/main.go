@@ -139,3 +139,28 @@ func parseBudget(args []string) (budgetArgs, error) {
 	}
 	return budgetArgs{name: *name, currency: *currency, limit: *limit, parent: *parent}, nil
 }
+
+type policyArgs struct {
+	changedBy string
+	in        policystore.Input
+}
+func parsePolicy(args []string) (policyArgs, error) {
+	fs := flag.NewFlagSet("policy", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	agent := fs.String("agent", "", "agent id")
+	budget := fs.String("budget", "", "budget id (UUID)")
+	merchants := fs.String("merchants", "", "comma separated allowed merchants, exact match")
+	currency := fs.String("currency", "", "3 upper case letters")
+	maxPer := fs.Int64("max-per-payment", 0, "per payment cap in minor units, 0 means no cap")
+	autoMax := fs.Int64("auto-approve-max", 0, "auto approve threshold in minor units, 0 means no human approval threshold")
+	by := fs.String("by", "", "who makes the change, recorded in the audit log")
+	if err := fs.Parse(args); err != nil {
+		return policyArgs{}, err
+	}
+	if fs.NArg() > 0 {
+		return policyArgs{}, fmt.Errorf("unexpected arguments: %v", fs.Args())
+	}
+	err := requireSet(fs, "agent", "budget", "merchants", "currency", "max-per-payment", "auto-approve-max", "by")
+	if err != nil {
+		return policyArgs{}, err
+	}
