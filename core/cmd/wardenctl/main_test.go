@@ -2,6 +2,7 @@ package main
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -23,5 +24,19 @@ func TestParsePolicyOK(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got.in.AllowedMerchants, []string{"acme", "globex"}) {
 		t.Fatalf("merchants = %v", got.in.AllowedMerchants)
+	}
+}
+
+func TestParsePolicyRequiresEveryFlag(t *testing.T) {
+	all := goodPolicyArgs()
+	for i := 0; i < len(all); i += 2 {
+		name := all[i]
+		var args []string
+		args = append(args, all[:i]...)
+		args = append(args, all[i+2:]...)
+		_, err := parsePolicy(args)
+		if err == nil || !strings.Contains(err.Error(), name) {
+			t.Errorf("without %s: err = %v, want a missing flag error naming it", name, err)
+		}
 	}
 }
