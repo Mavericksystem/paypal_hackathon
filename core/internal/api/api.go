@@ -7,6 +7,8 @@ import (
 	"net/http"
 
 	"github.com/Mavericksystem/warden/core/internal/intents"
+	"github.com/Mavericksystem/warden/core/internal/ledger"
+	"github.com/Mavericksystem/warden/core/internal/policystore"
 )
 
 const maxBodyBytes = 64 << 10
@@ -108,4 +110,25 @@ func (s *Server) createIntent(w http.ReponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, toResponse(got))
+}
+
+func (s *Server) writeServiceError(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case errors.Is(err, intents.ErrInvalidInput):
+		writeError(w, http.StatusBadRequest, "invalid_request", err.Error())
+	case errors.Is(err, ledger.ErrBudgetNotFound):
+		writeError(w, http.StatusNotFound, "budget_not_found", "budget not found")
+	case errors.Is(err, intents.ErrNotFound):
+		writeError(w, http.StatusNotFound, "not_found", "intent not found")
+	case errors.Is(err, intents.ErrIdempotencyConflict):
+		writeError(w, http.StatusConflict, "idempotency_conflict", err.Error())
+	case errors.Is(err, intents.ErrStateConflict):
+		writeError(w, http.StatusConflict, "state_conflict", "the intent changed concurrently, retry the same request")
+	case errors.Is(err, policystore.ErrNoPolicy):
+		writeError(w, http.StatusForbidden, "no_policy",
+			"this agent has no policy on this budget, nothing was decided, retry the same request once a policy exists")
+	default:
+		s.log.Error("request failed", "method", r.Method, "path", r.URL.Path, "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "internal error")
+	}
 }
