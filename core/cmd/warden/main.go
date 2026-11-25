@@ -1,8 +1,20 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"log/slog"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/Mavericksystem/warden/core/internal/api"
+	"github.com/Mavericksystem/warden/core/internal/config"
+	"github.com/Mavericksystem/warden/core/internal/db"
+	"github.com/Mavericksystem/warden/core/internal/intents"
+	"github.com/Mavericksystem/warden/core/internal/policystore"
 )
 
 func main() {
@@ -32,9 +44,9 @@ func run(log *slog.Logger) error {
 	}
 
 	store := policystore.New(pool)
-	
+
 	svc := intents.New(pool, store, nil)
-	
+
 	log.Warn("no AI checker is configured: every intent that passes the policy rules goes to human approval")
 	if !cfg.Loopback() {
 		log.Warn("listening on a non loopback address and there is no authentication yet", "addr", cfg.ListenAddr)
@@ -45,7 +57,28 @@ func run(log *slog.Logger) error {
 		Handler:           api.New(svc, log),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
-		WriteTimeout:      30 * time.Second, 
+		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
 		MaxHeaderBytes:    64 << 10,
 	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		log.Info("listening", "addr", cfg.ListenAddr)
+		errCh <- srv.ListenAndServe()
+	}()
+
+	select {
+	case err := <-errCh:
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return err
+	case <-ctx.Done():
+	}
+
+	log.Info("shutting down")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	return srv.Shutdown(shutdownCtx)
+}
