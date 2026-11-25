@@ -58,3 +58,21 @@ type intentResponse struct {
 	CreatedAt      string `json:"created_at"`
 	UpdatedAt      string `json:"updated_at"`
 }
+
+func toResponse(in intents.Intent) intentResponse {
+	return intentResponse{
+		ID:             in.ID,
+		AgentID:        in.AgentID,
+		BudgetID:       in.BudgetID,
+		AmountMinor:    in.AmountMinor,
+		State:          string(in.State),
+		Currency:       in.Currency,
+		Merchant:       in.Merchant,
+		Recipient:      in.Recipient,
+		Goal:           in.Goal,
+		IdempotencyKey: in.IdempotencyKey,
+		Version:        in.Version,
+		CreatedAt:      in.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:      in.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+	}
+}
