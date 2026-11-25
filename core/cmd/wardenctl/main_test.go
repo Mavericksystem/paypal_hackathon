@@ -63,3 +63,27 @@ func TestParsePolicyRejectsUnknownFlagAndExtraArgs(t *testing.T) {
 		t.Error("stray argument: want an error")
 	}
 }
+
+func TestParseBudget(t *testing.T) {
+	got, err := parseBudget([]string{"-name", "demo", "-currency", "USD", "-limit", "1000000"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.name != "demo" || got.currency != "USD" || got.limit != 1000000 || got.parent != "" {
+		t.Fatalf("parsed = %+v", got)
+	}
+
+	bad := map[string][]string{
+		"missing limit":    {"-name", "demo", "-currency", "USD"},
+		"lower currency":   {"-name", "demo", "-currency", "usd", "-limit", "1"},
+		"digit currency":   {"-name", "demo", "-currency", "123", "-limit", "1"},
+		"blank name":       {"-name", " ", "-currency", "USD", "-limit", "1"},
+		"negative limit":   {"-name", "demo", "-currency", "USD", "-limit", "-5"},
+		"unexpected extra": {"-name", "demo", "-currency", "USD", "-limit", "1", "extra"},
+	}
+	for name, args := range bad {
+		if _, err := parseBudget(args); err == nil {
+			t.Errorf("%s: want an error", name)
+		}
+	}
+}
