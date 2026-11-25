@@ -17,3 +17,15 @@ func TestLoadRequiresDatabaseURL(t *testing.T) {
 		}
 	}
 }
+
+func TestLoadRequiresDatabaseURLWithScheme(t *testing.T) {
+	c, err := config.Load(env(map[string]string{"DATABASE_URL": "postgres://x"}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if c.ListenAddr != config.DefaultListenAddr || !c.Loopback() {
+		t.Fatalf("default = %q loopback=%v", c.ListenAddr, c.Loopback())
+	}
+}
+
+func
