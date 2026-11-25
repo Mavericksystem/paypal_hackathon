@@ -278,3 +278,20 @@ func TestEndToEndWithRealStore(t *testing.T) {
 	if first.State != "pending_approval" {
 		t.Fatalf("state = %q, want pending_approval", first.State)
 	}
+
+	rec = do(t, h, "GET", "/intents/"+first.ID, "")
+	if rec.Code != http.StatusOK || decodeIntent(t, rec).ID != first.ID {
+		t.Fatalf("get: status = %d body = %s", rec.Code, rec.Body.String())
+	}
+
+
+	rec = do(t, h, "POST", "/intents", createBody(budget, "k1", 1000))
+	if rec.Code != http.StatusOK || decodeIntent(t, rec).ID != first.ID {
+		t.Fatalf("retry: status = %d body = %s", rec.Code, rec.Body.String())
+	}
+
+
+	rec = do(t, h, "POST", "/intents", createBody(budget, "k1", 2000))
+	if rec.Code != http.StatusConflict || errCode(t, rec) != "idempotency_conflict" {
+		t.Fatalf("conflict: status = %d body = %s", rec.Code, rec.Body.String())
+	}
