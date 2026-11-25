@@ -246,3 +246,19 @@ func createBody(budget, key string, amount int64) string {
 	return fmt.Sprintf(`{"agent_id":"agent-1","budget_id":%q,"idempotency_key":%q,"amount_minor":%d,"currency":"USD","merchant":"acme","recipient":"acme-payments","goal":"buy API credits"}`,
 		budget, key, amount)
 }
+
+func TestEndToEndWithRealStore(t *testing.T) {
+	pool := testutil.NewPool(t) 
+	ctx := context.Background()
+	budget, err := ledger.CreateBudget(ctx, pool, "e2e", "USD", 1_000_000, "", nil)
+	if err != nil {
+		t.Fatalf("create budget: %v", err)
+	}
+	store := policystore.New(pool)
+	h := api.New(intents.New(pool, store, nil), quietLogger())
+
+	
+	rec := do(t, h, "POST", "/intents", createBody(budget, "k1", 1000))
+	if rec.Code != http.StatusForbidden || errCode(t, rec) != "no_policy" {
+		t.Fatalf("no policy: status = %d body = %s", rec.Code, rec.Body.String())
+	}
