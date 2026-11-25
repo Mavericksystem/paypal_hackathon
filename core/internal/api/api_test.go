@@ -3,6 +3,12 @@ package api_test
 import (
 	"context"
 	"errors"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
 
 	"github.com/Mavericksystem/warden/core/internal/intents"
 )
@@ -28,4 +34,17 @@ func (f *fakeSvc) Get(ctx context.Context, id string) (intents.Intent, error) {
 		return intents.Intent{}, errors.New("unexpected Get call")
 	}
 	return f.get(ctx, id)
+}
+
+func quietLogger() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)) }
+
+func do(t *testing.T, h http.Handler, method, path, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	var rd io.Reader
+	if body != "" {
+		rd = strings.NewReader(body)
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(method, path, rd))
+	return rec
 }
