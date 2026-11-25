@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -92,4 +94,20 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) in
 		return 1
 	}
 	return 0
+}
+
+func usageExit(err error, stdout, stderr io.Writer) int {
+	if errors.Is(err, flag.ErrHelp) {
+		fmt.Fprint(stdout, usage)
+		return 0
+	}
+	fmt.Fprintf(stderr, "error: %v\n\n%s", err, usage)
+	return 2
+}
+
+type budgetArgs struct {
+	name     string
+	currency string
+	limit    int64
+	parent   string
 }
