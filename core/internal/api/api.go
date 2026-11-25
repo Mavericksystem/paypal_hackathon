@@ -76,3 +76,7 @@ func toResponse(in intents.Intent) intentResponse {
 		UpdatedAt:      in.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
 }
+
+func (s *Server) healthz(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
