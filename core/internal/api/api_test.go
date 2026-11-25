@@ -168,3 +168,19 @@ func TestServiceErrorsMapToStatuses(t *testing.T) {
 		{"no policy", fmt.Errorf("load policy: %w", policystore.ErrNoPolicy), 403, "no_policy"},
 		{"unexpected", errors.New("dial tcp: password=hunter2 refused"), 500, "internal_error"},
 	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			svc := &fakeSvc{create: func(context.Context, intents.CreateInput) (intents.Intent, error) {
+				return intents.Intent{}, tc.err
+			}}
+			rec := do(t, api.New(svc, quietLogger()), "POST", "/intents", validBody)
+			if rec.Code != tc.status || errCode(t, rec) != tc.code {
+				t.Fatalf("status = %d code = %q, want %d %q", rec.Code, errCode(t, rec), tc.status, tc.code)
+			}
+			if strings.Contains(rec.Body.String(), "hunter2") {
+				t.Fatalf("internal error detail leaked to the caller: %s", rec.Body.String())
+			}
+		})
+	}
