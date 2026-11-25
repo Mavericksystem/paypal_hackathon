@@ -86,3 +86,27 @@ func TestHealthz(t *testing.T) {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
 }
+
+func TestCreateIntentRejectsBadBodies(t *testing.T) {
+	cases := map[string]string{
+		"empty body":    "",
+		"not json":      "not json",
+		"array":         "[]",
+		"unknown field": `{"agent_id":"a","admin":true}`,
+		"trailing data": validBody + ` {"x":1}`,
+		"wrong type":    `{"amount_minor":"1000"}`,
+	}
+	for name, body := range cases {
+		body := body
+		t.Run(name, func(t *testing.T) {
+			svc := &fakeSvc{}
+			rec := do(t, api.New(svc, quietLogger()), "POST", "/intents", body)
+			if rec.Code != http.StatusBadRequest || errCode(t, rec) != "invalid_request" {
+				t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+			}
+			if svc.creates != 0 {
+				t.Fatalf("service was called %d times for a bad body", svc.creates)
+			}
+		})
+	}
+}
