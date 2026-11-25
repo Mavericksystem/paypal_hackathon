@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Mavericksystem/warden/core/internal/api"
 	"github.com/Mavericksystem/warden/core/internal/intents"
 )
 
@@ -77,4 +78,11 @@ func decodeIntent(t *testing.T, rec *httptest.ResponseRecorder) intentJSON {
 		t.Fatalf("decode intent %q: %v", rec.Body.String(), err)
 	}
 	return got
+}
+
+func TestHealthz(t *testing.T) {
+	h := api.New(&fakeSvc{}, quietLogger())
+	if rec := do(t, h, "GET", "/healthz", ""); rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
 }
