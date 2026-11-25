@@ -241,3 +241,8 @@ func TestPanicIsRecovered(t *testing.T) {
 		t.Fatalf("server unusable after a panic: %d", rec.Code)
 	}
 }
+
+func createBody(budget, key string, amount int64) string {
+	return fmt.Sprintf(`{"agent_id":"agent-1","budget_id":%q,"idempotency_key":%q,"amount_minor":%d,"currency":"USD","merchant":"acme","recipient":"acme-payments","goal":"buy API credits"}`,
+		budget, key, amount)
+}
