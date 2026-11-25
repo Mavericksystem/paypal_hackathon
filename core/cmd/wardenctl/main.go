@@ -144,6 +144,7 @@ type policyArgs struct {
 	changedBy string
 	in        policystore.Input
 }
+
 func parsePolicy(args []string) (policyArgs, error) {
 	fs := flag.NewFlagSet("policy", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
@@ -164,3 +165,15 @@ func parsePolicy(args []string) (policyArgs, error) {
 	if err != nil {
 		return policyArgs{}, err
 	}
+	return policyArgs{
+		changedBy: *by,
+		in: policystore.Input{
+			AgentID:             *agent,
+			BudgetID:            *budget,
+			AllowedMerchants:    splitMerchants(*merchants),
+			Currency:            *currency,
+			MaxPerPaymentMinor:  *maxPer,
+			AutoApproveMaxMinor: *autoMax,
+		},
+	}, nil
+}
