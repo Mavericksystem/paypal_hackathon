@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -13,7 +14,10 @@ import (
 
 	"github.com/Mavericksystem/warden/core/internal/api"
 	"github.com/Mavericksystem/warden/core/internal/intents"
+	"github.com/Mavericksystem/warden/core/internal/ledger"
+	"github.com/Mavericksystem/warden/core/internal/policystore"
 	"github.com/Mavericksystem/warden/core/internal/state"
+	"github.com/Mavericksystem/warden/core/internal/testutil"
 )
 
 const validBody = `{"agent_id":"agent-1","budget_id":"b-1","idempotency_key":"k1","amount_minor":1000,"currency":"USD","merchant":"acme","recipient":"acme-payments","goal":"buy API credits"}`
@@ -184,8 +188,9 @@ func TestServiceErrorsMapToStatuses(t *testing.T) {
 			}
 		})
 	}
+}
 
-	func TestGetIntent(t *testing.T) {
+func TestGetIntent(t *testing.T) {
 	var gotID string
 	svc := &fakeSvc{get: func(_ context.Context, id string) (intents.Intent, error) {
 		gotID = id
@@ -217,7 +222,7 @@ func TestWrongMethodAndUnknownPath(t *testing.T) {
 	if rec := do(t, h, "GET", "/nope", ""); rec.Code != http.StatusNotFound {
 		t.Errorf("GET /nope = %d, want 404", rec.Code)
 	}
-	
+
 	for _, p := range []string{"/policies", "/budgets", "/intents/abc/approve"} {
 		for _, m := range []string{"GET", "POST", "PUT"} {
 			if rec := do(t, h, m, p, validBody); rec.Code != http.StatusNotFound && rec.Code != http.StatusMethodNotAllowed {
@@ -248,7 +253,7 @@ func createBody(budget, key string, amount int64) string {
 }
 
 func TestEndToEndWithRealStore(t *testing.T) {
-	pool := testutil.NewPool(t) 
+	pool := testutil.NewPool(t)
 	ctx := context.Background()
 	budget, err := ledger.CreateBudget(ctx, pool, "e2e", "USD", 1_000_000, "", nil)
 	if err != nil {
@@ -257,7 +262,6 @@ func TestEndToEndWithRealStore(t *testing.T) {
 	store := policystore.New(pool)
 	h := api.New(intents.New(pool, store, nil), quietLogger())
 
-	
 	rec := do(t, h, "POST", "/intents", createBody(budget, "k1", 1000))
 	if rec.Code != http.StatusForbidden || errCode(t, rec) != "no_policy" {
 		t.Fatalf("no policy: status = %d body = %s", rec.Code, rec.Body.String())
@@ -284,12 +288,10 @@ func TestEndToEndWithRealStore(t *testing.T) {
 		t.Fatalf("get: status = %d body = %s", rec.Code, rec.Body.String())
 	}
 
-
 	rec = do(t, h, "POST", "/intents", createBody(budget, "k1", 1000))
 	if rec.Code != http.StatusOK || decodeIntent(t, rec).ID != first.ID {
 		t.Fatalf("retry: status = %d body = %s", rec.Code, rec.Body.String())
 	}
-
 
 	rec = do(t, h, "POST", "/intents", createBody(budget, "k1", 2000))
 	if rec.Code != http.StatusConflict || errCode(t, rec) != "idempotency_conflict" {
@@ -305,7 +307,6 @@ func TestEndToEndWithRealStore(t *testing.T) {
 		t.Fatalf("malformed budget: status = %d body = %s", rec.Code, rec.Body.String())
 	}
 
-	
 	for _, id := range []string{"00000000-0000-4000-8000-000000000001", "nope"} {
 		rec = do(t, h, "GET", "/intents/"+id, "")
 		if rec.Code != http.StatusNotFound {
