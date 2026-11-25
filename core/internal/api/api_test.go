@@ -122,3 +122,22 @@ func TestCreateIntentRejectsOversizedBody(t *testing.T) {
 		t.Fatalf("service was called for an oversized body")
 	}
 }
+
+func TestCreateIntentPassesFieldsAndReturnsIntent(t *testing.T) {
+	var got intents.CreateInput
+	svc := &fakeSvc{create: func(_ context.Context, in intents.CreateInput) (intents.Intent, error) {
+		got = in
+		return intents.Intent{
+			ID: "i-1", AgentID: in.AgentID, BudgetID: in.BudgetID, State: state.PendingApproval,
+			AmountMinor: in.AmountMinor, Currency: in.Currency, Merchant: in.Merchant,
+			Recipient: in.Recipient, Goal: in.Goal, IdempotencyKey: in.IdempotencyKey, Version: 3,
+		}, nil
+	}}
+	rec := do(t, api.New(svc, quietLogger()), "POST", "/intents", validBody)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	want := intents.CreateInput{
+		AgentID: "agent-1", BudgetID: "b-1", IdempotencyKey: "k1", AmountMinor: 1000,
+		Currency: "USD", Merchant: "acme", Recipient: "acme-payments", Goal: "buy API credits",
+	}
