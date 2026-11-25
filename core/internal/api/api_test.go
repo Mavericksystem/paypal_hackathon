@@ -22,3 +22,10 @@ func (f *fakeSvc) Create(ctx context.Context, in intents.CreateInput) (intents.I
 	}
 	return f.create(ctx, in)
 }
+
+func (f *fakeSvc) Get(ctx context.Context, id string) (intents.Intent, error) {
+	if f.get == nil {
+		return intents.Intent{}, errors.New("unexpected Get call")
+	}
+	return f.get(ctx, id)
+}
