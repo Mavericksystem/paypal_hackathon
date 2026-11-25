@@ -192,3 +192,14 @@ func requireSet(fs *flag.FlagSet, names ...string) error {
 	}
 	return nil
 }
+
+func splitMerchants(s string) []string {
+	if strings.TrimSpace(s) == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	for i := range parts {
+		parts[i] = strings.TrimSpace(parts[i])
+	}
+	return parts
+}
