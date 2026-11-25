@@ -225,3 +225,19 @@ func TestWrongMethodAndUnknownPath(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestPanicIsRecovered(t *testing.T) {
+	svc := &fakeSvc{get: func(context.Context, string) (intents.Intent, error) { panic("boom") }}
+	h := api.New(svc, quietLogger())
+	rec := do(t, h, "GET", "/intents/x", "")
+	if rec.Code != http.StatusInternalServerError || errCode(t, rec) != "internal_error" {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "boom") {
+		t.Fatalf("panic detail leaked: %s", rec.Body.String())
+	}
+	if rec := do(t, h, "GET", "/healthz", ""); rec.Code != http.StatusOK {
+		t.Fatalf("server unusable after a panic: %d", rec.Code)
+	}
+}
