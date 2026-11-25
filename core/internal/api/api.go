@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/Mavericksystem/warden/core/internal/intents"
 	"github.com/Mavericksystem/warden/core/internal/ledger"
@@ -187,4 +188,15 @@ type statusRecorder struct {
 func (r *statusRecorder) WriteHeader(code int) {
 	r.status = code
 	r.ResponseWriter.WriteHeader(code)
+}
+
+func (s *Server) accessLog(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+		next.ServeHTTP(rec, r)
+		s.log.Info("request",
+			"method", r.Method, "path", r.URL.Path, "status", rec.status,
+			"duration_ms", time.Since(start).Milliseconds())
+	})
 }
