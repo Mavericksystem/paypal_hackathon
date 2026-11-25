@@ -110,3 +110,15 @@ func TestCreateIntentRejectsBadBodies(t *testing.T) {
 		})
 	}
 }
+
+func TestCreateIntentRejectsOversizedBody(t *testing.T) {
+	svc := &fakeSvc{}
+	body := `{"goal":"` + strings.Repeat("a", 70<<10) + `"}`
+	rec := do(t, api.New(svc, quietLogger()), "POST", "/intents", body)
+	if rec.Code != http.StatusRequestEntityTooLarge || errCode(t, rec) != "body_too_large" {
+		t.Fatalf("status = %d body = %.200s", rec.Code, rec.Body.String())
+	}
+	if svc.creates != 0 {
+		t.Fatalf("service was called for an oversized body")
+	}
+}
