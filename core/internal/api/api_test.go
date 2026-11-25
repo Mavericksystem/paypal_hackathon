@@ -184,3 +184,24 @@ func TestServiceErrorsMapToStatuses(t *testing.T) {
 			}
 		})
 	}
+
+	func TestGetIntent(t *testing.T) {
+	var gotID string
+	svc := &fakeSvc{get: func(_ context.Context, id string) (intents.Intent, error) {
+		gotID = id
+		if id == "missing" {
+			return intents.Intent{}, intents.ErrNotFound
+		}
+		return intents.Intent{ID: id, State: state.Approved}, nil
+	}}
+	h := api.New(svc, quietLogger())
+
+	rec := do(t, h, "GET", "/intents/abc-123", "")
+	if rec.Code != http.StatusOK || gotID != "abc-123" || decodeIntent(t, rec).State != "approved" {
+		t.Fatalf("status = %d id = %q body = %s", rec.Code, gotID, rec.Body.String())
+	}
+	rec = do(t, h, "GET", "/intents/missing", "")
+	if rec.Code != http.StatusNotFound || errCode(t, rec) != "not_found" {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+}
