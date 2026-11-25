@@ -203,3 +203,15 @@ func splitMerchants(s string) []string {
 	}
 	return parts
 }
+
+func validCurrency(c string) bool {
+	if len(c) != 3 {
+		return false
+	}
+	for i := 0; i < len(c); i++ {
+		if c[i] < 'A' || c[i] > 'Z' {
+			return false
+		}
+	}
+	return true
+}
