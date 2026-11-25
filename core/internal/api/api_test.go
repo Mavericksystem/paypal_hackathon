@@ -205,3 +205,23 @@ func TestServiceErrorsMapToStatuses(t *testing.T) {
 		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestWrongMethodAndUnknownPath(t *testing.T) {
+	h := api.New(&fakeSvc{}, quietLogger())
+	if rec := do(t, h, "PUT", "/intents", validBody); rec.Code != http.StatusMethodNotAllowed {
+		t.Errorf("PUT /intents = %d, want 405", rec.Code)
+	}
+	if rec := do(t, h, "POST", "/intents/abc", validBody); rec.Code != http.StatusMethodNotAllowed {
+		t.Errorf("POST /intents/abc = %d, want 405", rec.Code)
+	}
+	if rec := do(t, h, "GET", "/nope", ""); rec.Code != http.StatusNotFound {
+		t.Errorf("GET /nope = %d, want 404", rec.Code)
+	}
+	
+	for _, p := range []string{"/policies", "/budgets", "/intents/abc/approve"} {
+		for _, m := range []string{"GET", "POST", "PUT"} {
+			if rec := do(t, h, m, p, validBody); rec.Code != http.StatusNotFound && rec.Code != http.StatusMethodNotAllowed {
+				t.Errorf("%s %s = %d, want 404 or 405", m, p, rec.Code)
+			}
+		}
+	}
