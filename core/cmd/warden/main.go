@@ -30,3 +30,22 @@ func run(log *slog.Logger) error {
 	if err := db.Migrate(ctx, pool); err != nil {
 		return err
 	}
+
+	store := policystore.New(pool)
+	
+	svc := intents.New(pool, store, nil)
+	
+	log.Warn("no AI checker is configured: every intent that passes the policy rules goes to human approval")
+	if !cfg.Loopback() {
+		log.Warn("listening on a non loopback address and there is no authentication yet", "addr", cfg.ListenAddr)
+	}
+
+	srv := &http.Server{
+		Addr:              cfg.ListenAddr,
+		Handler:           api.New(svc, log),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      30 * time.Second, 
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    64 << 10,
+	}
