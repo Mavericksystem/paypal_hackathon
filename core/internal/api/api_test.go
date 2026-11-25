@@ -62,3 +62,19 @@ func errCode(t *testing.T, rec *httptest.ResponseRecorder) string {
 	}
 	return b.Error.Code
 }
+
+type intentJSON struct {
+	ID          string `json:"id"`
+	State       string `json:"state"`
+	AmountMinor int64  `json:"amount_minor"`
+	Version     int64  `json:"version"`
+}
+
+func decodeIntent(t *testing.T, rec *httptest.ResponseRecorder) intentJSON {
+	t.Helper()
+	var got intentJSON
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode intent %q: %v", rec.Body.String(), err)
+	}
+	return got
+}
