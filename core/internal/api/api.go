@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 
@@ -79,4 +80,32 @@ func toResponse(in intents.Intent) intentResponse {
 
 func (s *Server) healthz(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (s *Server) createIntent(w http.ReponseWriter, r *http.Request) {
+	var req createRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		var tooBig *http.MaxBytesError
+		if errors.As(err, &tooBig) {
+			writeError(w, http.StatusRequestEntityTooLarge, "body_too_large", "request body is too large")
+			return
+		}
+		writeError(w, http.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	got, err := s.svc.Create(r.Context(), intents.CreateInput{
+		AgentID:        req.AgentID,
+		BudgetID:       req.BudgetID,
+		IdempotencyKey: req.IdempotencyKey,
+		AmountMinor:    req.AmountMinor,
+		Currency:       req.Currency,
+		Merchant:       req.Merchant,
+		Recipient:      req.Recipient,
+		Goal:           req.Goal,
+	})
+	if err != nil {
+		s.writeServiceError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, toResponse(got))
 }
