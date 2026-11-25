@@ -40,3 +40,17 @@ func TestParsePolicyRequiresEveryFlag(t *testing.T) {
 		}
 	}
 }
+
+func TestParsePolicyAcceptsExplicitZerosAndEmptyMerchants(t *testing.T) {
+	args := []string{
+		"-agent", "a", "-budget", "b", "-merchants", "", "-currency", "USD",
+		"-max-per-payment", "0", "-auto-approve-max", "0", "-by", "edward",
+	}
+	got, err := parsePolicy(args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.in.AllowedMerchants != nil || got.in.MaxPerPaymentMinor != 0 || got.in.AutoApproveMaxMinor != 0 {
+		t.Fatalf("parsed = %+v", got)
+	}
+}
