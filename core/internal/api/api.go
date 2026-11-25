@@ -2,7 +2,9 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 
@@ -131,4 +133,24 @@ func (s *Server) writeServiceError(w http.ResponseWriter, r *http.Request, err e
 		s.log.Error("request failed", "method", r.Method, "path", r.URL.Path, "error", err)
 		writeError(w, http.StatusInternalServerError, "internal_error", "internal error")
 	}
+}
+
+func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) error {
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(dst); err != nil {
+		if errors.Is(err, io.EOF) {
+			return errors.New("request body is empty")
+		}
+		return err
+	}
+	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
+		var tooBig *http.MaxBytesError
+		if errors.As(err, &tooBig) {
+			return err
+		}
+		return errors.New("request body must contain a single JSON object")
+	}
+	return nil
 }
