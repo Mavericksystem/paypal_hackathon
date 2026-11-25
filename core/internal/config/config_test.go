@@ -13,7 +13,7 @@ func env(m map[string]string) func(string) string {
 func TestLoadRequiresDatabaseURL(t *testing.T) {
 	for _, v := range []string{"", "  "} {
 		if _, err := config.Load(env(map[string]string{"DATABASE_URL": v})); err == nil {
-			t.Fatalf("DATABASE_URL %Q: WANT an error", v)
+			t.Fatalf("DATABASE_URL %q: WANT an error", v)
 		}
 	}
 }
@@ -42,9 +42,7 @@ func TestLoopback(t *testing.T) {
 	cases := map[string]bool{
 		"localhost:8080":   true,
 		"127.0.0.1:8080":   true,
-		"::1:8080":         true,
-		"localhost:8080":   true,
-		"8080":             false,
+		"[::1]:8080":       true,
 		"0.0.0.0:8080":     false,
 		"192.168.1.1:8080": false,
 	}
@@ -56,5 +54,8 @@ func TestLoopback(t *testing.T) {
 		if got := c.Loopback(); got != want {
 			t.Errorf("%s: Loopback() = %v, want %v", addr, got, want)
 		}
+	}
+	if (config.Config{ListenAddr: "8080"}).Loopback() {
+		t.Error("Loopback() = true for an invalid listen address")
 	}
 }
