@@ -295,3 +295,21 @@ func TestEndToEndWithRealStore(t *testing.T) {
 	if rec.Code != http.StatusConflict || errCode(t, rec) != "idempotency_conflict" {
 		t.Fatalf("conflict: status = %d body = %s", rec.Code, rec.Body.String())
 	}
+
+	rec = do(t, h, "POST", "/intents", createBody("00000000-0000-4000-8000-000000000001", "k2", 1000))
+	if rec.Code != http.StatusNotFound || errCode(t, rec) != "budget_not_found" {
+		t.Fatalf("unknown budget: status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	rec = do(t, h, "POST", "/intents", createBody("nope", "k3", 1000))
+	if rec.Code != http.StatusBadRequest || errCode(t, rec) != "invalid_request" {
+		t.Fatalf("malformed budget: status = %d body = %s", rec.Code, rec.Body.String())
+	}
+
+	
+	for _, id := range []string{"00000000-0000-4000-8000-000000000001", "nope"} {
+		rec = do(t, h, "GET", "/intents/"+id, "")
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("get %q: status = %d body = %s", id, rec.Code, rec.Body.String())
+		}
+	}
+}
