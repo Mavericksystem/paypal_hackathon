@@ -37,3 +37,24 @@ func TestLoadRejectsBadListenAddr(t *testing.T) {
 		}
 	}
 }
+
+func TestLoopback(t *testing.T) {
+	cases := map[string]bool{
+		"localhost:8080":   true,
+		"127.0.0.1:8080":   true,
+		"::1:8080":         true,
+		"localhost:8080":   true,
+		"8080":             false,
+		"0.0.0.0:8080":     false,
+		"192.168.1.1:8080": false,
+	}
+	for addr, want := range cases {
+		c, err := config.Load(env(map[string]string{"DATABASE_URL": "postgres://x", "LISTEN_ADDR": addr}))
+		if err != nil {
+			t.Fatalf("%s: %v", addr, err)
+		}
+		if got := c.Loopback(); got != want {
+			t.Errorf("%s: Loopback() = %v, want %v", addr, got, want)
+		}
+	}
+}
