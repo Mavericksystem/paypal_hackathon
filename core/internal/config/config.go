@@ -30,3 +30,15 @@ func Load(getenv func(string) string) (Config, error) {
 	}
 	return c, nil
 }
+
+func (c Config) Loopback() bool {
+	host, _, err := net.SplitHostPort(c.ListenAddr)
+	if err != nil {
+		return false
+	}
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
