@@ -177,3 +177,18 @@ func parsePolicy(args []string) (policyArgs, error) {
 		},
 	}, nil
 }
+
+func requireSet(fs *flag.FlagSet, names ...string) error {
+	seen := map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { seen[f.Name] = true })
+	var missing []string
+	for _, n := range names {
+		if !seen[n] {
+			missing = append(missing, "-"+n)
+		}
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("missing required flags: %s", strings.Join(missing, ", "))
+	}
+	return nil
+}
