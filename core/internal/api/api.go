@@ -18,13 +18,13 @@ import (
 
 const maxBodyBytes = 64 << 10
 
-type IntenService interface {
+type IntentService interface {
 	Create(ctx context.Context, in intents.CreateInput) (intents.Intent, error)
 	Get(ctx context.Context, id string) (intents.Intent, error)
 }
 
 type Server struct {
-	svc intents.Service
+	svc IntentService
 	log *slog.Logger
 }
 
@@ -37,7 +37,7 @@ func New(svc IntentService, log *slog.Logger) http.Handler {
 	mux.HandleFunc("POST /intents", s.createIntent)
 	mux.HandleFunc("GET /intents/{id}", s.getIntent)
 	mux.HandleFunc("GET /healthz", s.healthz)
-	return s.accesLog(s.recover(mux))
+	return s.accessLog(s.recoverer(mux))
 }
 
 type createRequest struct {
@@ -62,7 +62,7 @@ type intentResponse struct {
 	Recipient      string `json:"recipient"`
 	Goal           string `json:"goal"`
 	IdempotencyKey string `json:"idempotency_key"`
-	Version        int    `json:"version"`
+	Version        int64  `json:"version"`
 	CreatedAt      string `json:"created_at"`
 	UpdatedAt      string `json:"updated_at"`
 }
@@ -89,7 +89,7 @@ func (s *Server) healthz(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
-func (s *Server) createIntent(w http.ReponseWriter, r *http.Request) {
+func (s *Server) createIntent(w http.ResponseWriter, r *http.Request) {
 	var req createRequest
 	if err := decodeJSON(w, r, &req); err != nil {
 		var tooBig *http.MaxBytesError
@@ -114,7 +114,16 @@ func (s *Server) createIntent(w http.ReponseWriter, r *http.Request) {
 		s.writeServiceError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, toResponse(got))
+	writeJSON(w, http.StatusOK, toResponse(got))
+}
+
+func (s *Server) getIntent(w http.ResponseWriter, r *http.Request) {
+	got, err := s.svc.Get(r.Context(), r.PathValue("id"))
+	if err != nil {
+		s.writeServiceError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toResponse(got))
 }
 
 func (s *Server) writeServiceError(w http.ResponseWriter, r *http.Request, err error) {
