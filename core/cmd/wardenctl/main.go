@@ -38,3 +38,18 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) in
 		fmt.Fprint(stderr, usage)
 		return 2
 	}
+	var op func(ctx context.Context, pool *pgxpool.Pool) error
+	switch args[0] {
+	case "budget":
+		a, err := parseBudget(args[1:])
+		if err != nil {
+			return usageExit(err, stdout, stderr)
+		}
+		op = func(ctx context.Context, pool *pgxpool.Pool) error {
+			id, err := ledger.CreateBudget(ctx, pool, a.name, a.currency, a.limit, a.parent, nil)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintln(stdout, id) // only the id, so a script can capture it
+			return nil
+		}
