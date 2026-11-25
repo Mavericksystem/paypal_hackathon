@@ -54,3 +54,12 @@ func TestParsePolicyAcceptsExplicitZerosAndEmptyMerchants(t *testing.T) {
 		t.Fatalf("parsed = %+v", got)
 	}
 }
+
+func TestParsePolicyRejectsUnknownFlagAndExtraArgs(t *testing.T) {
+	if _, err := parsePolicy(append(goodPolicyArgs(), "-nope", "x")); err == nil {
+		t.Error("unknown flag: want an error")
+	}
+	if _, err := parsePolicy(append(goodPolicyArgs(), "stray")); err == nil {
+		t.Error("stray argument: want an error")
+	}
+}
