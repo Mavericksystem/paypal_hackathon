@@ -31,3 +31,14 @@ func New(svc IntentService, log *slog.Logger) http.Handler {
 	mux.HandleFunc("GET /healthz", s.healthz)
 	return s.accesLog(s.recover(mux))
 }
+
+type createRequest struct {
+	AgentID        string `json:"agent_id"`
+	BudgetID       string `json:"budget_id"`
+	IdempotencyKey string `json:"idempotency_key"`
+	AmountMinor    int64  `json:"amount_minor"`
+	Currency       string `json:"currency"`
+	Merchant       string `json:"merchant"`
+	Recipient      string `json:"recipient"`
+	Goal           string `json:"goal"`
+}
