@@ -1,10 +1,7 @@
-
 package main
 
 import (
 	"context"
-	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -29,6 +26,7 @@ DATABASE_URL must be set.
 Every policy flag is required on purpose. For -max-per-payment and -auto-approve-max,
 0 means "no limit", so it has to be written out. An empty -merchants "" denies every merchant.
 `
+
 func main() {
 	os.Exit(run(os.Args[1:], os.Getenv, os.Stdout, os.Stderr))
 }
@@ -54,7 +52,7 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) in
 			return nil
 		}
 
-		case "policy":
+	case "policy":
 		a, err := parsePolicy(args[1:])
 		if err != nil {
 			return usageExit(err, stdout, stderr)
@@ -70,3 +68,28 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) in
 		fmt.Fprintf(stderr, "error: unknown command %q\n\n%s", args[0], usage)
 		return 2
 	}
+
+	url := strings.TrimSpace(getenv("DATABASE_URL"))
+	if url == "" {
+		fmt.Fprintln(stderr, "error: DATABASE_URL is required")
+		return 2
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	pool, err := db.Connect(ctx, url, nil)
+	if err != nil {
+		fmt.Fprintf(stderr, "error: %v\n", err)
+		return 1
+	}
+	defer pool.Close()
+	if err := db.Migrate(ctx, pool); err != nil {
+		fmt.Fprintf(stderr, "error: %v\n", err)
+		return 1
+	}
+	if err := op(ctx, pool); err != nil {
+		fmt.Fprintf(stderr, "error: %v\n", err)
+		return 1
+	}
+	return 0
+}
