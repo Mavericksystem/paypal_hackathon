@@ -42,3 +42,19 @@ type createRequest struct {
 	Recipient      string `json:"recipient"`
 	Goal           string `json:"goal"`
 }
+
+type intentResponse struct {
+	ID             string `json:"id"`
+	AgentID        string `json:"agent_id"`
+	BudgetID       string `json:"budget_id"`
+	AmountMinor    int64  `json:"amount_minor"`
+	State          string `json:"state"`
+	Currency       string `json:"currency"`
+	Merchant       string `json:"merchant"`
+	Recipient      string `json:"recipient"`
+	Goal           string `json:"goal"`
+	IdempotencyKey string `json:"idempotency_key"`
+	Version        int    `json:"version"`
+	CreatedAt      string `json:"created_at"`
+	UpdatedAt      string `json:"updated_at"`
+}
