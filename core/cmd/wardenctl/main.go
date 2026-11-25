@@ -111,3 +111,31 @@ type budgetArgs struct {
 	limit    int64
 	parent   string
 }
+
+func parseBudget(args []string) (budgetArgs, error) {
+	fs := flag.NewFlagSet("budget", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	name := fs.String("name", "", "budget name")
+	currency := fs.String("currency", "", "3 upper case letters")
+	limit := fs.Int64("limit", 0, "limit in minor units")
+	parent := fs.String("parent", "", "parent budget id (optional)")
+	if err := fs.Parse(args); err != nil {
+		return budgetArgs{}, err
+	}
+	if fs.NArg() > 0 {
+		return budgetArgs{}, fmt.Errorf("unexpected arguments: %v", fs.Args())
+	}
+	if err := requireSet(fs, "name", "currency", "limit"); err != nil {
+		return budgetArgs{}, err
+	}
+	if strings.TrimSpace(*name) == "" {
+		return budgetArgs{}, errors.New("-name must not be blank")
+	}
+	if !validCurrency(*currency) {
+		return budgetArgs{}, errors.New("-currency must be 3 upper case letters A to Z")
+	}
+	if *limit < 0 {
+		return budgetArgs{}, errors.New("-limit must not be negative")
+	}
+	return budgetArgs{name: *name, currency: *currency, limit: *limit, parent: *parent}, nil
+}
