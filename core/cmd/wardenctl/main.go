@@ -53,3 +53,20 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) in
 			fmt.Fprintln(stdout, id) // only the id, so a script can capture it
 			return nil
 		}
+
+		case "policy":
+		a, err := parsePolicy(args[1:])
+		if err != nil {
+			return usageExit(err, stdout, stderr)
+		}
+		op = func(ctx context.Context, pool *pgxpool.Pool) error {
+			if err := policystore.New(pool).Put(ctx, a.changedBy, a.in); err != nil {
+				return err
+			}
+			fmt.Fprintf(stdout, "policy set for agent %s on budget %s\n", a.in.AgentID, a.in.BudgetID)
+			return nil
+		}
+	default:
+		fmt.Fprintf(stderr, "error: unknown command %q\n\n%s", args[0], usage)
+		return 2
+	}
