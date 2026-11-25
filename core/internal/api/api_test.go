@@ -13,6 +13,7 @@ import (
 
 	"github.com/Mavericksystem/warden/core/internal/api"
 	"github.com/Mavericksystem/warden/core/internal/intents"
+	"github.com/Mavericksystem/warden/core/internal/state"
 )
 
 const validBody = `{"agent_id":"agent-1","budget_id":"b-1","idempotency_key":"k1","amount_minor":1000,"currency":"USD","merchant":"acme","recipient":"acme-payments","goal":"buy API credits"}`
@@ -141,3 +142,14 @@ func TestCreateIntentPassesFieldsAndReturnsIntent(t *testing.T) {
 		AgentID: "agent-1", BudgetID: "b-1", IdempotencyKey: "k1", AmountMinor: 1000,
 		Currency: "USD", Merchant: "acme", Recipient: "acme-payments", Goal: "buy API credits",
 	}
+	if got != want {
+		t.Fatalf("service got %+v, want %+v", got, want)
+	}
+	out := decodeIntent(t, rec)
+	if out.ID != "i-1" || out.State != "pending_approval" || out.AmountMinor != 1000 || out.Version != 3 {
+		t.Fatalf("response = %+v", out)
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
+		t.Fatalf("Content-Type = %q", ct)
+	}
+}
