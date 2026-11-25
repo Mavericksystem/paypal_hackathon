@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"runtime/debug"
 	"time"
 
 	"github.com/Mavericksystem/warden/core/internal/intents"
@@ -198,5 +200,21 @@ func (s *Server) accessLog(next http.Handler) http.Handler {
 		s.log.Info("request",
 			"method", r.Method, "path", r.URL.Path, "status", rec.status,
 			"duration_ms", time.Since(start).Milliseconds())
+	})
+}
+
+func (s *Server) recoverer(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if rec := recover(); rec != nil {
+				if rec == http.ErrAbortHandler {
+					panic(rec)
+				}
+				s.log.Error("handler panic", "panic", fmt.Sprint(rec),
+					"method", r.Method, "path", r.URL.Path, "stack", string(debug.Stack()))
+				writeError(w, http.StatusInternalServerError, "internal_error", "internal error")
+			}
+		}()
+		next.ServeHTTP(w, r)
 	})
 }
