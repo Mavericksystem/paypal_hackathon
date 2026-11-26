@@ -16,10 +16,13 @@ package intents
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -53,6 +56,13 @@ func (p StaticPolicy) For(context.Context, string, string) (policy.Policy, error
 	return policy.Policy(p), nil
 }
 
+// Limits for the AI context fields. The caps are mirrored in migration 004.
+const (
+	maxItemRunes       = 200
+	maxSellerTextRunes = 8000
+	maxQuantity        = 100000
+)
+
 // CheckInput is what the AI check is allowed to see.
 type CheckInput struct {
 	IntentID    string
@@ -61,6 +71,9 @@ type CheckInput struct {
 	Recipient   string
 	AmountMinor int64
 	Currency    string
+	Item        string
+	Quantity    int
+	SellerText  string // untrusted, attacker controlled
 }
 
 // CheckResult carries the verdict plus what must be recorded with it in the audit log.
@@ -85,6 +98,9 @@ type Intent struct {
 	Merchant       string
 	Recipient      string
 	Goal           string
+	Item           string
+	Quantity       int
+	SellerText     string
 	IdempotencyKey string
 	Version        int64
 	CreatedAt      time.Time
@@ -100,6 +116,9 @@ type CreateInput struct {
 	Merchant       string
 	Recipient      string
 	Goal           string
+	Item           string
+	Quantity       int
+	SellerText     string
 }
 
 func (in CreateInput) validate() error {
@@ -118,8 +137,32 @@ func (in CreateInput) validate() error {
 		return fmt.Errorf("%w: merchant is required", ErrInvalidInput)
 	case strings.TrimSpace(in.Recipient) == "":
 		return fmt.Errorf("%w: recipient is required", ErrInvalidInput)
+	case in.Quantity < 0 || in.Quantity > maxQuantity:
+		return fmt.Errorf("%w: quantity must be between 0 and %d", ErrInvalidInput, maxQuantity)
+	}
+	if err := checkText("item", in.Item, maxItemRunes); err != nil {
+		return err
+	}
+	return checkText("seller_text", in.SellerText, maxSellerTextRunes)
+}
+
+// checkText rejects what Postgres would reject with a 500 (NUL, invalid UTF-8)
+// and enforces the length cap before the row is written.
+func checkText(name, v string, maxRunes int) error {
+	switch {
+	case !utf8.ValidString(v):
+		return fmt.Errorf("%w: %s must be valid UTF-8", ErrInvalidInput, name)
+	case strings.ContainsRune(v, 0):
+		return fmt.Errorf("%w: %s must not contain NUL", ErrInvalidInput, name)
+	case utf8.RuneCountInString(v) > maxRunes:
+		return fmt.Errorf("%w: %s is longer than %d characters", ErrInvalidInput, name, maxRunes)
 	}
 	return nil
+}
+
+func sellerTextDigest(s string) string {
+	sum := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(sum[:])
 }
 
 type Service struct {
@@ -146,14 +189,15 @@ func New(pool *pgxpool.Pool, policies PolicySource, checker Checker) *Service {
 }
 
 const selectSQL = `SELECT id::text, agent_id, budget_id::text, state, amount_minor, currency,
-	merchant, recipient, goal, idempotency_key, version, created_at, updated_at
+	merchant, recipient, goal, item, quantity, seller_text, idempotency_key, version, created_at, updated_at
 	FROM intents`
 
 func scanIntent(row pgx.Row) (Intent, error) {
 	var in Intent
 	var st string
 	err := row.Scan(&in.ID, &in.AgentID, &in.BudgetID, &st, &in.AmountMinor, &in.Currency,
-		&in.Merchant, &in.Recipient, &in.Goal, &in.IdempotencyKey, &in.Version, &in.CreatedAt, &in.UpdatedAt)
+		&in.Merchant, &in.Recipient, &in.Goal, &in.Item, &in.Quantity, &in.SellerText,
+		&in.IdempotencyKey, &in.Version, &in.CreatedAt, &in.UpdatedAt)
 	in.State = state.State(st)
 	return in, err
 }
@@ -208,24 +252,29 @@ func (s *Service) insert(ctx context.Context, in CreateInput) (string, error) {
 	now := s.Now()
 	var id string
 	err = tx.QueryRow(ctx,
-		`INSERT INTO intents (agent_id, budget_id, state, amount_minor, currency, merchant, recipient, goal, idempotency_key)
-		 VALUES ($1, $2::uuid, 'created', $3, $4, $5, $6, $7, $8)
+		`INSERT INTO intents (agent_id, budget_id, state, amount_minor, currency, merchant, recipient, goal, item, quantity, seller_text, idempotency_key)
+		 VALUES ($1, $2::uuid, 'created', $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		 ON CONFLICT (agent_id, idempotency_key) DO NOTHING
 		 RETURNING id::text`,
-		in.AgentID, in.BudgetID, in.AmountMinor, in.Currency, in.Merchant, in.Recipient, in.Goal, in.IdempotencyKey,
+		in.AgentID, in.BudgetID, in.AmountMinor, in.Currency, in.Merchant, in.Recipient, in.Goal,
+		in.Item, in.Quantity, in.SellerText, in.IdempotencyKey,
 	).Scan(&id)
 
 	switch {
 	case err == nil:
 		payload := map[string]any{
-			"agent_id":        in.AgentID,
-			"budget_id":       in.BudgetID,
-			"amount_minor":    in.AmountMinor,
-			"currency":        in.Currency,
-			"merchant":        in.Merchant,
-			"recipient":       in.Recipient,
-			"goal":            in.Goal,
-			"idempotency_key": in.IdempotencyKey,
+			"agent_id":           in.AgentID,
+			"budget_id":          in.BudgetID,
+			"amount_minor":       in.AmountMinor,
+			"currency":           in.Currency,
+			"merchant":           in.Merchant,
+			"recipient":          in.Recipient,
+			"goal":               in.Goal,
+			"item":               in.Item,
+			"quantity":           in.Quantity,
+			"seller_text_sha256": sellerTextDigest(in.SellerText),
+			"seller_text_runes":  utf8.RuneCountInString(in.SellerText),
+			"idempotency_key":    in.IdempotencyKey,
 		}
 		if _, err := audit.Append(ctx, tx, id, "agent:"+in.AgentID, "intent_created", payload, now); err != nil {
 			return "", err
@@ -243,7 +292,8 @@ func (s *Service) insert(ctx context.Context, in CreateInput) (string, error) {
 			return "", fmt.Errorf("read existing intent: %w", err)
 		}
 		if ex.BudgetID != in.BudgetID || ex.AmountMinor != in.AmountMinor || ex.Currency != in.Currency ||
-			ex.Merchant != in.Merchant || ex.Recipient != in.Recipient || ex.Goal != in.Goal {
+			ex.Merchant != in.Merchant || ex.Recipient != in.Recipient || ex.Goal != in.Goal ||
+			ex.Item != in.Item || ex.Quantity != in.Quantity || ex.SellerText != in.SellerText {
 			return "", ErrIdempotencyConflict
 		}
 		return ex.ID, nil
@@ -358,6 +408,9 @@ func (s *Service) runAI(ctx context.Context, in Intent) (CheckResult, error) {
 		Recipient:   in.Recipient,
 		AmountMinor: in.AmountMinor,
 		Currency:    in.Currency,
+		Item:        in.Item,
+		Quantity:    in.Quantity,
+		SellerText:  in.SellerText,
 	})
 }
 
