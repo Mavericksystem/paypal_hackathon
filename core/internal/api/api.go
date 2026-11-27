@@ -49,6 +49,9 @@ type createRequest struct {
 	Merchant       string `json:"merchant"`
 	Recipient      string `json:"recipient"`
 	Goal           string `json:"goal"`
+	Item           string `json:"item"`
+	Quantity       int    `json:"quantity"`
+	SellerText     string `json:"seller_text"`
 }
 
 type intentResponse struct {
