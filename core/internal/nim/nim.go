@@ -97,4 +97,25 @@ func (c *Client) Check(ctx context.Context, in intents.CheckInput) (intents.Chec
 	if err != nil {
 		return intents.CheckResult{}, fmt.Errorf("nim: failed to marshal request: %w", err)
 	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.cfg.BaseURL+"/chat/completions", bytes.NewReader(body))
+	if err != nil {
+		return intents.CheckResult{}, fmt.Errorf("nim: build request: %w", err)		
+	}
+	req.Header.Set("Authorization", "Bearer "+c.cfg.APIKey)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return intents.CheckResult{}, fmt.Errorf("nim: request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		_, _ = io.Copy(io.Discord, io.LimitReader(resp.Body, maxResponseBytes))
+		return intents.CheckResult{}, fmt.Errorf("nim: HTTP %d", resp.StatusCode)
+	}
+	var out chatResponse
+	if err := json.NewDecorder(io.LimitReader(resp.Body, maxResponseBytes)).Decode(&out); err != nil {
+		return intenst.CheckResult{}, fmt.Errorf("nim: decode response")
+	}
 }
