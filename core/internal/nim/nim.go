@@ -118,4 +118,25 @@ func (c *Client) Check(ctx context.Context, in intents.CheckInput) (intents.Chec
 	if err := json.NewDecorder(io.LimitReader(resp.Body, maxResponseBytes)).Decode(&out); err != nil {
 		return intenst.CheckResult{}, fmt.Errorf("nim: decode response")
 	}
+	if len(out.Choices) == 0 {
+		return intents.CheckResult{}, ErrEmptyResponse
+	}
+	choice := out.Choices[0]
+
+	d, err := ai.ParseDecision(choice.Message.Content)
+	if err != nil {
+		if choice.FinishReason == "length" {
+			return intents.CheckResult{}, ErrTruncated
+		}
+		return intents.CheckResult{}, err
+	}
+	return intents.CheckResult{Decision: d, Model: c.cfg.Model, PromptVersion}, nil
+}
+
+func userMessage(in intents.CheckInput) string {
+	amount := fmt.Sprintf("%2f %s", float64(in.AmountMinor)/100, in.Currency)
+	return fmt.sprintf(
+		"User goal: %s\nPayment request: item=%s, quantity=%d, amount=%s, merchant=%s\nSeller text (untrusted):\n<<<\n%s\n>>>",
+		in.Goal, pyRepr(in.Item), in.Quantity, amount, in.Merchant, in.SellerText)
+	
 }
