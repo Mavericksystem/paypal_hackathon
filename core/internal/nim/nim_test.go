@@ -1,6 +1,7 @@
 package nim
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"net/http"
@@ -47,4 +48,14 @@ func serve(t *testing.T, status int, body string) *Client {
 	}))
 	t.Cleanup(srv.Close)
 	return New(Config{APIKey: "k", BaseURL: srv.URL, Model: "m", MaxTokens: 10})
+}
+
+var okInput = intents.CheckInput{Goal: "g", Item: "i", Quantity: 1, AmountMinor: 100, Currency: "USD", Merchant: "m"}
+
+func TestCheckOK(t *testing.T) {
+	c := serve(t, 200, `{"choices":[{"finish_reason":"stop","message":{"content":"{\"verdict\":\"escalate\",\"reason\":\"vague\"}"}}]}`)
+	res, err := c.Check(context.Background(), okInput)
+	if err != nil || res.Decision.Verdict != "escalate" || res.PromptVersion != "v4" {
+		t.Fatalf("res=%+v err=%v", res, err)
+	}
 }
