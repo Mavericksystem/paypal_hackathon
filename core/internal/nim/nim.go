@@ -79,4 +79,22 @@ type chatResponse struct {
 			Content string `json:"content"`
 		} `json:"message"`
 	} `json:"choices"`
+}
+
+func (c *Client) Check(ctx context.Context, in intents.CheckInput) (intents.CheckResult, error) {
+	if strings.TrimSpace(in.Item) == "" || in.Quantity <= 1 {
+		return intents.CheckResult{}, ErrInsufficientContext
 	}
+	body, err := json.Marshal(chatrequest{
+		Model: c.cfg.Model,
+		Messages: []message{
+			{Role: "system", Content: systemPrompt},
+			{Role: "user", Content: userMessage(in)},
+		},
+		MaxTokens: c.cfg.MaxTokens,
+		Temperature: 0.0,
+	})
+	if err != nil {
+		return intents.CheckResult{}, fmt.Errorf("nim: failed to marshal request: %w", err)
+	}
+}
