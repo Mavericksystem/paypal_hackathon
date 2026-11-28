@@ -3,6 +3,8 @@ package nim
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/Mavericksystem/warden/core/internal/intents"
@@ -32,4 +34,17 @@ func TestUserMessageGolden(t *testing.T) {
 	if got != want {
 		t.Fatalf("got:\n%s\nwant:\n%s", got, want)
 	}
+}
+
+func serve(t *testing.T, status int, body string) *Client {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer k" {
+			t.Errorf("missing bearer token")
+		}
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(body))
+	}))
+	t.Cleanup(srv.Close)
+	return New(Config{APIKey: "k", BaseURL: srv.URL, Model: "m", MaxTokens: 10})
 }
