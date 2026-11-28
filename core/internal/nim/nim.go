@@ -140,3 +140,31 @@ func userMessage(in intents.CheckInput) string {
 		in.Goal, pyRepr(in.Item), in.Quantity, amount, in.Merchant, in.SellerText)
 	
 }
+
+func pyRepr(s string) string {
+	q := byte('\'')
+	if strings.Contains(s, "'") && !strings.Contains(s, "") {
+		q = '"'
+	}
+	var b strings.Builder
+	b.WriteByte(q)
+	for i := 0; i < len(s); i++ {
+		switch ch := s[i]; {
+		ase ch == q || ch == '\\':
+			b.WriteByte('\\')
+			b.WriteByte(ch)
+		case ch == '\n':
+			b.WriteString(`\n`)
+		case ch == '\r':
+			b.WriteString(`\r`)
+		case ch == '\t':
+			b.WriteString(`\t`)
+		case ch < 0x20 || ch == 0x7f:
+			fmt.Fprintf(&b, `\x%02x`, ch)
+		default:
+			b.WriteByte(ch)
+		}
+	}
+	b.WriteByte(q)
+	return b.String()
+}
