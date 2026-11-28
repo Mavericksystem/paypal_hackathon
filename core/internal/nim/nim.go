@@ -3,6 +3,7 @@ package nim
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 )
 
@@ -50,4 +51,23 @@ func ConfigFromEnv(getenv func(string) string) (Config, error) {
 		c.MaxTokens = n
 	}
 	return c, nil
+}
+
+type Client struct {
+	cfg Config
+	HTTP *http.Client
+}
+
+func New(cfg config) *Client { return &Client{cfg: cfg, HTTP: &http.Client{}}
+
+type message struct {
+	Role	string `json:"role"`
+	Content	string `json:"content"`
+}
+
+type chatRequest struct {
+	Model    string    `json:"model"`
+	Messages []message `json:"messages"`
+	MaxTokens int      `json:"max_tokens"`
+	Temperature float64 `json:"temperature"`
 }
