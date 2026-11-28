@@ -59,3 +59,22 @@ func TestCheckOK(t *testing.T) {
 		t.Fatalf("res=%+v err=%v", res, err)
 	}
 }
+
+func TestCheckFailuresFailClosed(t *testing.T) {
+	cases := map[string]*Client{
+		"http 500":  serve(t, 500, `{}`),
+		"truncated": serve(t, 200, `{"choices":[{"finish_reason":"length","message":{"content":"thinking..."}}]}`),
+		"no json":   serve(t, 200, `{"choices":[{"finish_reason":"stop","message":{"content":"sure"}}]}`),
+		"no choice": serve(t, 200, `{"choices":[]}`),
+	}
+	for name, c := range cases {
+		if _, err := c.Check(context.Background(), okInput); err == nil {
+			t.Errorf("%s: expected an error", name)
+		}
+	}
+	bad := okInput
+	bad.Item = ""
+	if _, err := cases["http 500"].Check(context.Background(), bad); err != ErrInsufficientContext {
+		t.Errorf("missing item: got %v", err)
+	}
+}
