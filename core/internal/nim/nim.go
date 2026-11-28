@@ -71,3 +71,12 @@ type chatRequest struct {
 	MaxTokens int      `json:"max_tokens"`
 	Temperature float64 `json:"temperature"`
 }
+
+type chatResponse struct {
+	Choices []struct {
+		FinishReason string `json:"finish_reason"`
+		Message struct {
+			Content string `json:"content"`
+		} `json:"message"`
+	} `json:"choices"`
+	}
