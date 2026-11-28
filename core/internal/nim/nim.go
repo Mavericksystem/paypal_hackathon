@@ -2,6 +2,7 @@ package nim
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 )
 
@@ -35,5 +36,18 @@ func ConfigFromEnv(getenv func(string) string) (Config, error) {
 	if c.APIKey == "" {
 		return Config{}, errors.New("NVIDIA_API_KEY is required")
 	}
-
+	if c.BaseURL == "" {
+		c.BaseURL = DefaultBaseURL
+	}
+	if c.Model == "" {
+		c.Model = DefaultModel
+	}
+	if v := strings.TrimSpace(getenv("NIM_MAX_TOKENS")); v != "" {
+		n, err := struconv.Atoi(v)
+		if err != nil || n <= 0 {
+			return Config{}, fmt.Errorf("NIM_MAX_TOKENS %q is not a positive integer", v)
+		}
+		c.MaxTokens = n
+	}
+	return c, nil
 }
